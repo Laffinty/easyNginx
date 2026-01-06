@@ -199,7 +199,7 @@ class MainWindow(QMainWindow):
     
     def _on_add_static_site(self):
         """添加静态站点."""
-        dialog = StaticSiteConfigDialog(self.main_viewmodel, self)
+        dialog = StaticSiteConfigDialog(self.main_viewmodel, self, self.language_manager)
         if dialog.exec() == QDialog.Accepted:
             config = dialog.get_config()
             if config:
@@ -207,7 +207,7 @@ class MainWindow(QMainWindow):
     
     def _on_add_php_site(self):
         """添加PHP站点."""
-        dialog = PHPSiteConfigDialog(self.main_viewmodel, self)
+        dialog = PHPSiteConfigDialog(self.main_viewmodel, self, self.language_manager)
         if dialog.exec() == QDialog.Accepted:
             config = dialog.get_config()
             if config:
@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
     
     def _on_add_proxy_site(self):
         """添加代理站点."""
-        dialog = ProxySiteConfigDialog(self.main_viewmodel, self)
+        dialog = ProxySiteConfigDialog(self.main_viewmodel, self, self.language_manager)
         if dialog.exec() == QDialog.Accepted:
             config = dialog.get_config()
             if config:
@@ -240,21 +240,21 @@ class MainWindow(QMainWindow):
         """编辑站点."""
         # 根据站点类型创建对应的对话框
         if site.site_type == "static":
-            dialog = StaticSiteConfigDialog(self.main_viewmodel, self)
+            dialog = StaticSiteConfigDialog(self.main_viewmodel, self, self.language_manager)
             dialog.load_site(site)
             if dialog.exec() == QDialog.Accepted:
                 config = dialog.get_config()
                 if config:
                     self.main_viewmodel.update_site(site.site_name, config)
         elif site.site_type == "php":
-            dialog = PHPSiteConfigDialog(self.main_viewmodel, self)
+            dialog = PHPSiteConfigDialog(self.main_viewmodel, self, self.language_manager)
             dialog.load_site(site)
             if dialog.exec() == QDialog.Accepted:
                 config = dialog.get_config()
                 if config:
                     self.main_viewmodel.update_site(site.site_name, config)
         elif site.site_type == "proxy":
-            dialog = ProxySiteConfigDialog(self.main_viewmodel, self)
+            dialog = ProxySiteConfigDialog(self.main_viewmodel, self, self.language_manager)
             dialog.load_site(site)
             if dialog.exec() == QDialog.Accepted:
                 config = dialog.get_config()
@@ -288,7 +288,7 @@ class MainWindow(QMainWindow):
         from utils.config_registry import ConfigRegistry
         from views.takeover_dialog import NginxTakeoverDialog
         
-        dialog = NginxTakeoverDialog(self)
+        dialog = NginxTakeoverDialog(self, "", self.language_manager)
         
         if dialog.exec() == QDialog.Accepted:
             nginx_path, config_path = dialog.get_nginx_paths()

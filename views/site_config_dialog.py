@@ -18,13 +18,14 @@ class BaseSiteConfigDialog(QDialog):
     提供通用表单和配置管理功能
     """
     
-    def __init__(self, main_viewmodel, dialog_title: str, parent=None):
+    def __init__(self, main_viewmodel, dialog_title: str, parent=None, language_manager=None):
         """初始化配置对话框."""
         super().__init__(parent)
         self.main_viewmodel = main_viewmodel
         self.dialog_title = dialog_title
         self.original_site_name: str = ""
-        self.language_manager = LanguageManager()
+        # 使用传入的language_manager或创建新实例
+        self.language_manager = language_manager if language_manager else LanguageManager()
         
         self._setup_ui()
         self._connect_signals()
@@ -221,9 +222,9 @@ class BaseSiteConfigDialog(QDialog):
 class StaticSiteConfigDialog(BaseSiteConfigDialog):
     """静态站点配置对话框."""
     
-    def __init__(self, main_viewmodel, parent=None):
+    def __init__(self, main_viewmodel, parent=None, language_manager=None):
         """初始化静态站点对话框."""
-        super().__init__(main_viewmodel, "", parent)
+        super().__init__(main_viewmodel, "", parent, language_manager)
         # Set the title after initialization to use the language manager
         self.setWindowTitle(self.language_manager.get("new_static"))
     
@@ -299,9 +300,9 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
 class PHPSiteConfigDialog(BaseSiteConfigDialog):
     """PHP站点配置对话框."""
     
-    def __init__(self, main_viewmodel, parent=None):
+    def __init__(self, main_viewmodel, parent=None, language_manager=None):
         """初始化PHP站点对话框."""
-        super().__init__(main_viewmodel, "", parent)
+        super().__init__(main_viewmodel, "", parent, language_manager)
         # Set the title after initialization to use the language manager
         self.setWindowTitle(self.language_manager.get("new_php"))
     
@@ -428,9 +429,9 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
 class ProxySiteConfigDialog(BaseSiteConfigDialog):
     """反向代理配置对话框."""
     
-    def __init__(self, main_viewmodel, parent=None):
+    def __init__(self, main_viewmodel, parent=None, language_manager=None):
         """初始化反向代理对话框."""
-        super().__init__(main_viewmodel, "", parent)
+        super().__init__(main_viewmodel, "", parent, language_manager)
         # Set the title after initialization to use the language manager
         self.setWindowTitle(self.language_manager.get("new_proxy"))
     
@@ -447,7 +448,7 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
         
         # 路径前缀
         self.location_edit = QLineEdit("/")
-        self.location_edit.setPlaceholderText("/")
+        self.location_edit.setPlaceholderText(self.language_manager.get("location_placeholder"))
         proxy_layout.addRow(self.language_manager.get("location_path"), self.location_edit)
         
         # WebSocket支持

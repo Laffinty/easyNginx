@@ -16,18 +16,20 @@ from utils.language_manager import LanguageManager
 class NginxTakeoverDialog(QDialog):
     """Nginx接管对话框。"""
     
-    def __init__(self, parent=None, nginx_dir: str = ""):
+    def __init__(self, parent=None, nginx_dir: str = "", language_manager=None):
         """
         初始化接管对话框。
         
         Args:
             parent: 父窗口
             nginx_dir: 初始Nginx目录
+            language_manager: 语言管理器实例（可选）
         """
         super().__init__(parent)
         self.nginx_dir = Path(nginx_dir) if nginx_dir else None
         self.backup_path = None
-        self.language_manager = LanguageManager()
+        # 使用传入的language_manager或创建新实例
+        self.language_manager = language_manager if language_manager else LanguageManager()
         self.setup_ui()
     
     def setup_ui(self):
@@ -91,18 +93,6 @@ class NginxTakeoverDialog(QDialog):
         backup_group.setLayout(backup_layout)
         layout.addWidget(backup_group)
         
-        # 配置预览
-        preview_group = QGroupBox(self.language_manager.get("takeover_step3_title"))
-        preview_layout = QVBoxLayout()
-        
-        self.preview_text = QTextEdit()
-        self.preview_text.setReadOnly(True)
-        self.preview_text.setMaximumHeight(150)
-        preview_layout.addWidget(self.preview_text)
-        
-        preview_group.setLayout(preview_layout)
-        layout.addWidget(preview_group)
-        
         # 按钮
         button_layout = QHBoxLayout()
         button_layout.addStretch()
@@ -122,9 +112,6 @@ class NginxTakeoverDialog(QDialog):
         if self.nginx_dir:
             self.dir_label.setText(str(self.nginx_dir))
             self._on_check_nginx()
-        
-        # 显示配置预览
-        self.preview_text.setText(self._generate_optimized_config_preview())
     
     def _on_select_dir(self):
         """选择Nginx目录。"""

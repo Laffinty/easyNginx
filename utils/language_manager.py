@@ -146,6 +146,7 @@ class LanguageManager(QObject):
             "backend_url": "Backend URL:",
             "backend_placeholder": "http://localhost:8080",
             "location_path": "Location Path:",
+            "location_placeholder": "/",
             "websocket_support": "Enable WebSocket Support",
             
             "save_apply": "Save & Apply",

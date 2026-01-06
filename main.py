@@ -24,6 +24,7 @@ sys.path.insert(0, str(application_path))
 from utils.logger import init_logger
 from utils.theme_manager import ThemeManager
 from utils.config_registry import ConfigRegistry
+from utils.language_manager import LanguageManager
 from viewmodels.main_viewmodel import MainViewModel
 from views.main_window import MainWindow
 from views.takeover_dialog import NginxTakeoverDialog
@@ -149,12 +150,13 @@ def setup_exception_handler():
     sys.excepthook = handle_exception
 
 
-def check_and_handle_nginx_takeover(config_registry: ConfigRegistry) -> tuple[Optional[str], Optional[str]]:
+def check_and_handle_nginx_takeover(config_registry: ConfigRegistry, language_manager: LanguageManager = None) -> tuple[Optional[str], Optional[str]]:
     """
     检查并处理Nginx接管。
     
     Args:
         config_registry: 注册表配置管理器
+        language_manager: 语言管理器实例（可选）
         
     Returns:
         (nginx_path, config_path)，如果用户取消返回(None, None)
@@ -183,7 +185,10 @@ def check_and_handle_nginx_takeover(config_registry: ConfigRegistry) -> tuple[Op
     if need_takeover:
         # 显示接管对话框
         logger.info("Showing Nginx takeover dialog")
-        dialog = NginxTakeoverDialog(None, nginx_dir)
+        # 如果 language_manager 为 None，则创建实例
+        if language_manager is None:
+            language_manager = LanguageManager()
+        dialog = NginxTakeoverDialog(None, nginx_dir, language_manager)
         
         if dialog.exec() == QDialog.Accepted:
             # 获取接管后的路径
@@ -221,7 +226,7 @@ def check_and_handle_nginx_takeover(config_registry: ConfigRegistry) -> tuple[Op
             config_registry.clear_takeover_status()
             
             # 重新显示接管对话框
-            dialog = NginxTakeoverDialog()
+            dialog = NginxTakeoverDialog(None, "", language_manager)
             if dialog.exec() == QDialog.Accepted:
                 nginx_path, config_path = dialog.get_nginx_paths()
                 
@@ -240,7 +245,7 @@ def check_and_handle_nginx_takeover(config_registry: ConfigRegistry) -> tuple[Op
     
     # 4. 如果都没有找到，显示接管对话框
     logger.info("No Nginx configuration found, showing takeover dialog")
-    dialog = NginxTakeoverDialog()
+    dialog = NginxTakeoverDialog(None, "", language_manager)
     
     if dialog.exec() == QDialog.Accepted:
         nginx_path, config_path = dialog.get_nginx_paths()
@@ -271,7 +276,7 @@ def main():
         # 创建Qt应用
         app = QApplication(sys.argv)
         app.setApplicationName("easyNginx")
-        app.setApplicationDisplayName("easyNginx - Nginx管理工具")
+        app.setApplicationDisplayName("easyNginx")
         app.setOrganizationName("easyNginx")
         app.setOrganizationDomain("easynginx.com")
         
@@ -281,8 +286,11 @@ def main():
         # 初始化注册表配置管理器
         config_registry = ConfigRegistry()
         
+        # 初始化语言管理器
+        language_manager = LanguageManager()
+        
         # 检查是否需要Nginx接管
-        nginx_path, config_path = check_and_handle_nginx_takeover(config_registry)
+        nginx_path, config_path = check_and_handle_nginx_takeover(config_registry, language_manager)
         
         if not nginx_path:
             logger.warning("Nginx takeover cancelled by user, exiting application")
