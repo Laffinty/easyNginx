@@ -225,7 +225,7 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
         """初始化静态站点对话框."""
         super().__init__(main_viewmodel, "", parent)
         # Set the title after initialization to use the language manager
-        self.setWindowTitle(self.language_manager.get("static_site_config"))
+        self.setWindowTitle(self.language_manager.get("new_static"))
     
     def _setup_specific_form(self, layout):
         """设置静态站点特定表单."""
@@ -303,7 +303,7 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         """初始化PHP站点对话框."""
         super().__init__(main_viewmodel, "", parent)
         # Set the title after initialization to use the language manager
-        self.setWindowTitle(self.language_manager.get("php_site_config"))
+        self.setWindowTitle(self.language_manager.get("new_php"))
     
     def _setup_specific_form(self, layout):
         """设置PHP站点特定表单."""
@@ -432,7 +432,7 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
         """初始化反向代理对话框."""
         super().__init__(main_viewmodel, "", parent)
         # Set the title after initialization to use the language manager
-        self.setWindowTitle(self.language_manager.get("proxy_site_config"))
+        self.setWindowTitle(self.language_manager.get("new_proxy"))
     
     def _setup_specific_form(self, layout):
         """设置反向代理特定表单."""
@@ -452,7 +452,7 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
         
         # WebSocket支持
         self.websocket_check = QCheckBox(self.language_manager.get("websocket_support"))
-        self.websocket_check.setToolTip("为WebSocket应用启用升级支持")
+        self.websocket_check.setToolTip(self.language_manager.get("websocket_tooltip"))
         proxy_layout.addRow("", self.websocket_check)
         
         proxy_group.setLayout(proxy_layout)
