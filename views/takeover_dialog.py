@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from loguru import logger
+from utils.language_manager import LanguageManager
 
 
 class NginxTakeoverDialog(QDialog):
@@ -26,36 +27,36 @@ class NginxTakeoverDialog(QDialog):
         super().__init__(parent)
         self.nginx_dir = Path(nginx_dir) if nginx_dir else None
         self.backup_path = None
+        self.language_manager = LanguageManager()
         self.setup_ui()
     
     def setup_ui(self):
         """设置UI。"""
-        self.setWindowTitle("Nginx接管向导")
+        self.setWindowTitle(self.language_manager.get("takeover_dialog_title"))
         self.setMinimumSize(600, 400)
         
         layout = QVBoxLayout(self)
         
         # 说明
         desc_label = QLabel(
-            "本向导将帮助您接管Nginx配置管理。\n"
-            "我们将：\n"
-            "1. 检查Nginx安装完整性\n"
-            "2. 备份现有配置文件\n"
-            "3. 应用性能优化和安全加固配置"
+            self.language_manager.get("takeover_dialog_description") + "\n" +
+            self.language_manager.get("takeover_dialog_step1") + "\n" +
+            self.language_manager.get("takeover_dialog_step2") + "\n" +
+            self.language_manager.get("takeover_dialog_step3")
         )
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
         
         # Nginx目录选择
-        dir_group = QGroupBox("1. 选择Nginx目录")
+        dir_group = QGroupBox(self.language_manager.get("takeover_step1_title"))
         dir_layout = QVBoxLayout()
         
         dir_select_layout = QHBoxLayout()
-        self.dir_label = QLabel(str(self.nginx_dir) if self.nginx_dir else "未选择")
+        self.dir_label = QLabel(str(self.nginx_dir) if self.nginx_dir else self.language_manager.get("not_selected"))
         self.dir_label.setStyleSheet("padding: 5px; background-color: #f0f0f0;")
         dir_select_layout.addWidget(self.dir_label)
         
-        self.select_button = QPushButton("浏览...")
+        self.select_button = QPushButton(self.language_manager.get("browse"))
         self.select_button.clicked.connect(self._on_select_dir)
         dir_select_layout.addWidget(self.select_button)
         
@@ -67,7 +68,7 @@ class NginxTakeoverDialog(QDialog):
         self.check_result_label.setStyleSheet("padding: 10px;")
         dir_layout.addWidget(self.check_result_label)
         
-        self.check_button = QPushButton("检查Nginx完整性")
+        self.check_button = QPushButton(self.language_manager.get("check_nginx_integrity"))
         self.check_button.clicked.connect(self._on_check_nginx)
         self.check_button.setEnabled(False)
         dir_layout.addWidget(self.check_button)
@@ -76,14 +77,14 @@ class NginxTakeoverDialog(QDialog):
         layout.addWidget(dir_group)
         
         # 备份选项
-        backup_group = QGroupBox("2. 备份选项")
+        backup_group = QGroupBox(self.language_manager.get("takeover_step2_title"))
         backup_layout = QVBoxLayout()
         
-        self.backup_check = QCheckBox("备份现有nginx.conf配置文件")
+        self.backup_check = QCheckBox(self.language_manager.get("backup_existing_config"))
         self.backup_check.setChecked(True)
         backup_layout.addWidget(self.backup_check)
         
-        self.backup_info_label = QLabel("备份文件名格式: YYYYMMDD_HHMMSS_8位随机数.nginx.conf.bk")
+        self.backup_info_label = QLabel(self.language_manager.get("backup_filename_format"))
         self.backup_info_label.setStyleSheet("color: #666; font-size: 12px;")
         backup_layout.addWidget(self.backup_info_label)
         
@@ -91,7 +92,7 @@ class NginxTakeoverDialog(QDialog):
         layout.addWidget(backup_group)
         
         # 配置预览
-        preview_group = QGroupBox("3. 新配置预览（性能优化和安全加固）")
+        preview_group = QGroupBox(self.language_manager.get("takeover_step3_title"))
         preview_layout = QVBoxLayout()
         
         self.preview_text = QTextEdit()
@@ -106,11 +107,11 @@ class NginxTakeoverDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        self.cancel_button = QPushButton("取消")
+        self.cancel_button = QPushButton(self.language_manager.get("cancel"))
         self.cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(self.cancel_button)
         
-        self.takeover_button = QPushButton("执行接管")
+        self.takeover_button = QPushButton(self.language_manager.get("execute_takeover"))
         self.takeover_button.clicked.connect(self._on_takeover)
         self.takeover_button.setEnabled(False)
         button_layout.addWidget(self.takeover_button)
@@ -129,7 +130,7 @@ class NginxTakeoverDialog(QDialog):
         """选择Nginx目录。"""
         dir_path = QFileDialog.getExistingDirectory(
             self,
-            "选择Nginx所在目录",
+            self.language_manager.get("select_nginx_directory"),
             str(self.nginx_dir) if self.nginx_dir else ""
         )
         
@@ -161,24 +162,24 @@ class NginxTakeoverDialog(QDialog):
         warnings = []
         
         if not nginx_exe.exists():
-            errors.append(f"❌ 找不到 nginx.exe: {nginx_exe}")
+            errors.append(self.language_manager.get("nginx_exe_not_found") + f": {nginx_exe}")
         else:
-            warnings.append(f"✓ 找到 nginx.exe")
+            warnings.append(self.language_manager.get("nginx_exe_found"))
         
         if not conf_dir.exists():
-            errors.append(f"❌ 找不到 conf 目录: {conf_dir}")
+            errors.append(self.language_manager.get("conf_dir_not_found") + f": {conf_dir}")
         else:
-            warnings.append(f"✓ 找到 conf 目录")
+            warnings.append(self.language_manager.get("conf_dir_found"))
         
         if not nginx_conf.exists():
-            errors.append(f"⚠ 找不到 nginx.conf: {nginx_conf}（将创建新配置）")
+            errors.append(self.language_manager.get("nginx_conf_not_found") + f": {nginx_conf}" + self.language_manager.get("will_create_new_config"))
         else:
-            warnings.append(f"✓ 找到 nginx.conf")
+            warnings.append(self.language_manager.get("nginx_conf_found"))
         
         if not mime_types.exists():
-            errors.append(f"⚠ 找不到 mime.types: {mime_types}（可能导致配置问题）")
+            errors.append(self.language_manager.get("mime_types_not_found") + f": {mime_types}" + self.language_manager.get("may_cause_config_issues"))
         else:
-            warnings.append(f"✓ 找到 mime.types")
+            warnings.append(self.language_manager.get("mime_types_found"))
         
         # 显示结果
         if errors:
@@ -187,7 +188,7 @@ class NginxTakeoverDialog(QDialog):
             self.check_result_label.setStyleSheet("padding: 10px; color: #d32f2f;")
             self.takeover_button.setEnabled(False)
         else:
-            result_text = "✅ Nginx安装完整\n\n" + "\n".join(warnings)
+            result_text = self.language_manager.get("nginx_installation_complete") + "\n\n" + "\n".join(warnings)
             self.check_result_label.setText(result_text)
             self.check_result_label.setStyleSheet("padding: 10px; color: #388e3c;")
             self.takeover_button.setEnabled(True)
@@ -232,7 +233,7 @@ http {
     def _on_takeover(self):
         """执行接管。"""
         if not self.nginx_dir:
-            QMessageBox.warning(self, "错误", "请先选择Nginx目录")
+            QMessageBox.warning(self, self.language_manager.get("error"), self.language_manager.get("please_select_nginx_directory"))
             return
         
         try:
@@ -271,16 +272,16 @@ http {
             logger.info(f"Takeover completed successfully: {self.nginx_dir}")
             
             # 显示成功信息
-            msg = f"接管成功！\n\nNginx目录: {self.nginx_dir}\n"
+            msg = self.language_manager.get("takeover_success_message") + f"\n\n" + self.language_manager.get("nginx_directory") + f": {self.nginx_dir}\n"
             if self.backup_path:
-                msg += f"备份文件: {self.backup_path.name}"
+                msg += self.language_manager.get("backup_file") + f": {self.backup_path.name}"
             
-            QMessageBox.information(self, "接管成功", msg)
+            QMessageBox.information(self, self.language_manager.get("takeover_success"), msg)
             self.accept()
             
         except Exception as e:
             logger.error(f"Takeover failed: {e}")
-            QMessageBox.critical(self, "接管失败", f"接管过程中出现错误:\n{str(e)}")
+            QMessageBox.critical(self, self.language_manager.get("takeover_failed"), self.language_manager.get("takeover_error_occurred") + f":\n{str(e)}")
     
     def _generate_full_optimized_config(self) -> str:
         """生成完整的优化配置。"""

@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Signal, QSize, Slot
 from PySide6.QtGui import QAction, QStandardItemModel, QStandardItem
 from loguru import logger
 from models.nginx_status import SiteListItem
+from utils.language_manager import LanguageManager
 
 
 class SiteListWidget(QWidget):
@@ -30,6 +31,7 @@ class SiteListWidget(QWidget):
         """初始化站点列表部件."""
         super().__init__()
         self.main_viewmodel = main_viewmodel
+        self.language_manager = LanguageManager()
         self.site_items: list[SiteListItem] = []
         
         self._setup_ui()
@@ -68,7 +70,7 @@ class SiteListWidget(QWidget):
         layout.addWidget(self.site_table)
         
         # 底部统计信息
-        self.status_label = QLabel("共 0 个站点")
+        self.status_label = QLabel(self.language_manager.get("total_sites", total=0, static=0, php=0, proxy=0))
         layout.addWidget(self.status_label)
     
     def _connect_signals(self):
@@ -133,11 +135,8 @@ class SiteListWidget(QWidget):
         static_text = self.main_viewmodel.language_manager.get("static_site")
         php_text = self.main_viewmodel.language_manager.get("php_site")
         proxy_text = self.main_viewmodel.language_manager.get("proxy_site")
-        yes_text = "是"
-        no_text = "否"
-        if self.main_viewmodel.language_manager.current_language == "en":
-            yes_text = "Yes"
-            no_text = "No"
+        yes_text = self.main_viewmodel.language_manager.get("yes")
+        no_text = self.main_viewmodel.language_manager.get("no")
         
         self.model.setRowCount(0)
         

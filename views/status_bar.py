@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QTimer
 from PySide6.QtGui import QIcon, QColor, QPainter, QPixmap
 from loguru import logger
 from models.nginx_status import NginxStatus, NginxProcessStatus
+from utils.language_manager import LanguageManager
 
 
 class StatusBar(QStatusBar):
@@ -23,6 +24,7 @@ class StatusBar(QStatusBar):
         """初始化状态栏."""
         super().__init__()
         self.main_viewmodel = main_viewmodel
+        self.language_manager = LanguageManager()
         self._status = NginxStatus()
         self._blinking = False
         self._blink_timer = QTimer()
@@ -46,7 +48,7 @@ class StatusBar(QStatusBar):
         self._update_status_icon()
         status_layout.addWidget(self.status_icon)
         
-        self.status_text = QLabel("Nginx未运行")
+        self.status_text = QLabel(self.language_manager.get("nginx_not_running"))
         status_layout.addWidget(self.status_text)
         
         self.addWidget(status_widget)
@@ -61,18 +63,18 @@ class StatusBar(QStatusBar):
         control_layout.setContentsMargins(0, 0, 0, 0)
         control_layout.setSpacing(4)
         
-        self.start_btn = QPushButton("启动")
+        self.start_btn = QPushButton(self.language_manager.get("start"))
         self.start_btn.setFixedWidth(60)
         self.start_btn.clicked.connect(lambda: self.main_viewmodel.control_nginx("start"))
         control_layout.addWidget(self.start_btn)
         
-        self.stop_btn = QPushButton("停止")
+        self.stop_btn = QPushButton(self.language_manager.get("stop"))
         self.stop_btn.setFixedWidth(60)
         self.stop_btn.clicked.connect(lambda: self.main_viewmodel.control_nginx("stop"))
         self.stop_btn.setEnabled(False)
         control_layout.addWidget(self.stop_btn)
         
-        self.reload_btn = QPushButton("重载")
+        self.reload_btn = QPushButton(self.language_manager.get("reload"))
         self.reload_btn.setFixedWidth(60)
         self.reload_btn.clicked.connect(lambda: self.main_viewmodel.control_nginx("reload"))
         self.reload_btn.setEnabled(False)
@@ -80,23 +82,23 @@ class StatusBar(QStatusBar):
         
         # 更多操作菜单
         self.more_btn = QToolButton()
-        self.more_btn.setText("更多...")
+        self.more_btn.setText(self.language_manager.get("more"))
         self.more_btn.setPopupMode(QToolButton.InstantPopup)
         
         menu = QMenu(self.more_btn)
         
-        self.test_action = menu.addAction("测试配置")
+        self.test_action = menu.addAction(self.language_manager.get("test_config"))
         self.test_action.triggered.connect(self.main_viewmodel.test_config)
         
-        self.backup_action = menu.addAction("备份配置")
+        self.backup_action = menu.addAction(self.language_manager.get("backup_config"))
         self.backup_action.triggered.connect(self.main_viewmodel.backup_config)
         
         menu.addSeparator()
         
-        self.open_dir_action = menu.addAction("打开配置目录")
+        self.open_dir_action = menu.addAction(self.language_manager.get("open_config_dir"))
         self.open_dir_action.triggered.connect(self.main_viewmodel.nginx_service.open_config_directory)
         
-        self.open_editor_action = menu.addAction("编辑配置文件")
+        self.open_editor_action = menu.addAction(self.language_manager.get("edit_config_file"))
         self.open_editor_action.triggered.connect(self.main_viewmodel.nginx_service.open_config_in_editor)
         
         self.more_btn.setMenu(menu)
@@ -127,12 +129,12 @@ class StatusBar(QStatusBar):
         # 更新信息文本
         info_parts = []
         if status.total_sites > 0:
-            info_parts.append(f"站点: {status.total_sites}")
+            info_parts.append(f"{self.language_manager.get('sites')}: {status.total_sites}")
         
         if status.process_info and status.is_running():
-            info_parts.append(f"CPU: {status.process_info.cpu_percent}%")
-            info_parts.append(f"内存: {status.get_memory_usage_mb():.1f}MB")
-            info_parts.append(f"运行时间: {status.get_uptime_display()}")
+            info_parts.append(f"{self.language_manager.get('cpu_usage')}: {status.process_info.cpu_percent}%")
+            info_parts.append(f"{self.language_manager.get('memory_usage')}: {status.get_memory_usage_mb():.1f}MB")
+            info_parts.append(f"{self.language_manager.get('uptime')}: {status.get_uptime_display()}")
         
         self.info_text.setText(" | ".join(info_parts) if info_parts else "")
         
@@ -191,3 +193,20 @@ class StatusBar(QStatusBar):
     def paintEvent(self, event):
         """绘制事件."""
         super().paintEvent(event)
+    
+    def retranslate_ui(self):
+        """重新翻译UI文本."""
+        # 更新按钮文本
+        self.start_btn.setText(self.language_manager.get("start"))
+        self.stop_btn.setText(self.language_manager.get("stop"))
+        self.reload_btn.setText(self.language_manager.get("reload"))
+        self.more_btn.setText(self.language_manager.get("more"))
+        
+        # 更新菜单项文本
+        self.test_action.setText(self.language_manager.get("test_config"))
+        self.backup_action.setText(self.language_manager.get("backup_config"))
+        self.open_dir_action.setText(self.language_manager.get("open_config_dir"))
+        self.open_editor_action.setText(self.language_manager.get("edit_config_file"))
+        
+        # 更新当前状态显示
+        self.update_status(self._status)

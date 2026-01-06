@@ -158,25 +158,22 @@ class LanguageManager(QObject):
             "about_title": "About easyNginx",
             "about_content": """
         <h2>easyNginx v1.0</h2>
-        <p><b>Professional Nginx Management Tool</b></p>
-        <p>A high-performance, secure and reliable Nginx configuration management solution for system administrators</p>
+        <p><b>专业Nginx管理工具</b></p>
+        <p>基于MIT许可证发布</p>
         <hr>
-        <p><b>Core Features:</b></p>
+        <p><b>主要功能：</b></p>
         <ul>
-            <li>Three configuration modes: Static Site, PHP Dynamic Site, Reverse Proxy</li>
-            <li>Enforced performance optimization baseline (F5/CIS best practices)</li>
-            <li>Optional HTTPS security hardening (TLS 1.2/1.3, HSTS, security headers)</li>
-            <li>Intelligent configuration parsing and real-time preview</li>
-            <li>Startup time <3 seconds, memory usage <150MB</li>
-            <li>Supports dark/light/high contrast themes</li>
+            <li>纯静态站点、PHP动态站点、反向代理三种配置模式</li>
+            <li>F5/CIS Nginx最佳实践优化</li>
+            <li>HTTPS双向认证与安全加固</li>
         </ul>
         <hr>
-        <p><b>Tech Stack:</b> Python 3.11+, PySide6, Pydantic, Jinja2, Loguru</p>
-        <p><b>Platform:</b> Windows 10/11 (x64)</p>
-        <p><b>License:</b> Commercial Software</p>
+        <p><b>技术栈：</b> Python 3.11+, PySide6</p>
+        <p><b>许可证：</b> MIT License</p>
         <hr>
-        <p>© 2026 easyNginx Team. All rights reserved.</p>
+        <p>Copyright (c) 2026 Laffinty</p>
             """,
+            "app_name": "easyNginx",
             
             # Error messages
             "error": "Error",

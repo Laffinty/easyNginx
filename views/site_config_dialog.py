@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot
 from loguru import logger
 from models.site_config import SiteConfigBase, StaticSiteConfig, PHPSiteConfig, ProxySiteConfig
+from utils.language_manager import LanguageManager
 
 
 class BaseSiteConfigDialog(QDialog):
@@ -23,6 +24,7 @@ class BaseSiteConfigDialog(QDialog):
         self.main_viewmodel = main_viewmodel
         self.dialog_title = dialog_title
         self.original_site_name: str = ""
+        self.language_manager = LanguageManager()
         
         self._setup_ui()
         self._connect_signals()
@@ -36,10 +38,11 @@ class BaseSiteConfigDialog(QDialog):
         main_layout.setContentsMargins(16, 16, 16, 16)
         main_layout.setSpacing(12)
         
-        # 标题
-        title = QLabel(self.dialog_title)
-        title.setStyleSheet("font-size: 16pt; font-weight: 600;")
-        main_layout.addWidget(title)
+        # 标题 - only add if dialog_title is not empty
+        if self.dialog_title:
+            title = QLabel(self.dialog_title)
+            title.setStyleSheet("font-size: 16pt; font-weight: 600;")
+            main_layout.addWidget(title)
         
         # 通用配置区域
         self._setup_common_form(main_layout)
@@ -52,29 +55,29 @@ class BaseSiteConfigDialog(QDialog):
         
         # 按钮区域
         button_box = QDialogButtonBox()
-        self.save_btn = button_box.addButton("保存并应用", QDialogButtonBox.AcceptRole)
+        self.save_btn = button_box.addButton(self.language_manager.get("save_apply"), QDialogButtonBox.AcceptRole)
         self.save_btn.setStyleSheet("font-weight: 600;")
         
-        self.cancel_btn = button_box.addButton("取消", QDialogButtonBox.RejectRole)
+        self.cancel_btn = button_box.addButton(self.language_manager.get("cancel"), QDialogButtonBox.RejectRole)
         button_box.rejected.connect(self.reject)
         
         main_layout.addWidget(button_box)
         
         # 添加强制优化提示
-        tip_label = QLabel("* 所有配置将自动应用F5/CIS Nginx最佳实践优化")
+        tip_label = QLabel(self.language_manager.get("force_optimization_tip"))
         tip_label.setStyleSheet("color: #666; font-size: 9pt;")
         main_layout.addWidget(tip_label)
         
     def _setup_common_form(self, layout):
         """设置通用表单."""
-        common_group = QGroupBox("基础配置")
+        common_group = QGroupBox(self.language_manager.get("basic_config"))
         common_layout = QFormLayout()
         common_layout.setSpacing(8)
         
         # 站点名称
         self.site_name_edit = QLineEdit()
-        self.site_name_edit.setPlaceholderText("输入站点名称")
-        common_layout.addRow("站点名称:", self.site_name_edit)
+        self.site_name_edit.setPlaceholderText(self.language_manager.get("site_name_placeholder"))
+        common_layout.addRow(self.language_manager.get("site_name") + ":", self.site_name_edit)
         
         # 监听端口
         port_layout = QHBoxLayout()
@@ -83,26 +86,26 @@ class BaseSiteConfigDialog(QDialog):
         self.port_spin.setValue(80)
         port_layout.addWidget(self.port_spin)
         port_layout.addStretch()
-        common_layout.addRow("监听端口:", port_layout)
+        common_layout.addRow(self.language_manager.get("listen_port") + ":", port_layout)
         
         # 服务器名称
         self.server_name_edit = QLineEdit()
-        self.server_name_edit.setPlaceholderText("localhost 或域名")
-        common_layout.addRow("服务器名称:", self.server_name_edit)
+        self.server_name_edit.setPlaceholderText(self.language_manager.get("server_name_placeholder"))
+        common_layout.addRow(self.language_manager.get("server_name") + ":", self.server_name_edit)
         
         common_group.setLayout(common_layout)
         layout.addWidget(common_group)
         
     def _setup_https_form(self, layout):
         """设置HTTPS表单."""
-        https_group = QGroupBox("HTTPS配置")
+        https_group = QGroupBox(self.language_manager.get("https_config"))
         https_layout = QVBoxLayout()
         https_layout.setSpacing(8)
         
         # HTTPS开关
         https_switch_layout = QHBoxLayout()
-        self.https_check = QCheckBox("启用HTTPS")
-        self.https_check.setToolTip("启用HTTPS需要SSL证书")
+        self.https_check = QCheckBox(self.language_manager.get("enable_https"))
+        self.https_check.setToolTip(self.language_manager.get("https_tooltip"))
         self.https_check.stateChanged.connect(self._on_https_toggled)
         https_switch_layout.addWidget(self.https_check)
         https_switch_layout.addStretch()
@@ -111,11 +114,11 @@ class BaseSiteConfigDialog(QDialog):
         # SSL证书路径
         cert_layout = QHBoxLayout()
         self.ssl_cert_edit = QLineEdit()
-        self.ssl_cert_edit.setPlaceholderText("选择SSL证书文件 (.crt/.pem)")
+        self.ssl_cert_edit.setPlaceholderText(self.language_manager.get("ssl_cert_placeholder"))
         self.ssl_cert_edit.setEnabled(False)
         cert_layout.addWidget(self.ssl_cert_edit)
         
-        self.cert_browse_btn = QPushButton("浏览")
+        self.cert_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.cert_browse_btn.setEnabled(False)
         self.cert_browse_btn.clicked.connect(self._browse_cert)
         cert_layout.addWidget(self.cert_browse_btn)
@@ -124,11 +127,11 @@ class BaseSiteConfigDialog(QDialog):
         # SSL私钥路径
         key_layout = QHBoxLayout()
         self.ssl_key_edit = QLineEdit()
-        self.ssl_key_edit.setPlaceholderText("选择SSL私钥文件 (.key)")
+        self.ssl_key_edit.setPlaceholderText(self.language_manager.get("ssl_key_placeholder"))
         self.ssl_key_edit.setEnabled(False)
         key_layout.addWidget(self.ssl_key_edit)
         
-        self.key_browse_btn = QPushButton("浏览")
+        self.key_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.key_browse_btn.setEnabled(False)
         self.key_browse_btn.clicked.connect(self._browse_key)
         key_layout.addWidget(self.key_browse_btn)
@@ -181,7 +184,7 @@ class BaseSiteConfigDialog(QDialog):
         """浏览证书."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择SSL证书",
+            self.language_manager.get("ssl_cert").rstrip(":"),
             "",
             "证书文件 (*.crt *.pem *.cer);;所有文件 (*.*)"
         )
@@ -192,7 +195,7 @@ class BaseSiteConfigDialog(QDialog):
         """浏览私钥."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择SSL私钥",
+            self.language_manager.get("ssl_key").rstrip(":"),
             "",
             "密钥文件 (*.key *.pem);;所有文件 (*.*)"
         )
@@ -220,29 +223,31 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
     
     def __init__(self, main_viewmodel, parent=None):
         """初始化静态站点对话框."""
-        super().__init__(main_viewmodel, "静态站点配置", parent)
+        super().__init__(main_viewmodel, "", parent)
+        # Set the title after initialization to use the language manager
+        self.setWindowTitle(self.language_manager.get("static_site_config"))
     
     def _setup_specific_form(self, layout):
         """设置静态站点特定表单."""
-        specific_group = QGroupBox("静态站点设置")
+        specific_group = QGroupBox(self.language_manager.get("static_settings"))
         specific_layout = QFormLayout()
         specific_layout.setSpacing(8)
         
         # 网站根目录
         root_layout = QHBoxLayout()
         self.root_edit = QLineEdit()
-        self.root_edit.setPlaceholderText("选择网站根目录")
+        self.root_edit.setPlaceholderText(self.language_manager.get("root_placeholder"))
         root_layout.addWidget(self.root_edit)
         
-        self.root_browse_btn = QPushButton("浏览")
+        self.root_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.root_browse_btn.clicked.connect(self._browse_root)
         root_layout.addWidget(self.root_browse_btn)
-        specific_layout.addRow("网站根目录:", root_layout)
+        specific_layout.addRow(self.language_manager.get("root_dir"), root_layout)
         
         # 索引文件
         self.index_edit = QLineEdit("index.html")
-        self.index_edit.setPlaceholderText("index.html")
-        specific_layout.addRow("索引文件:", self.index_edit)
+        self.index_edit.setPlaceholderText(self.language_manager.get("index_placeholder"))
+        specific_layout.addRow(self.language_manager.get("index_file"), self.index_edit)
         
         specific_group.setLayout(specific_layout)
         layout.addWidget(specific_group)
@@ -284,7 +289,7 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
         """浏览根目录."""
         directory = QFileDialog.getExistingDirectory(
             self,
-            "选择网站根目录",
+            self.language_manager.get("root_dir").rstrip(":"),
             self.root_edit.text() or ""
         )
         if directory:
@@ -296,18 +301,20 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
     
     def __init__(self, main_viewmodel, parent=None):
         """初始化PHP站点对话框."""
-        super().__init__(main_viewmodel, "PHP站点配置", parent)
+        super().__init__(main_viewmodel, "", parent)
+        # Set the title after initialization to use the language manager
+        self.setWindowTitle(self.language_manager.get("php_site_config"))
     
     def _setup_specific_form(self, layout):
         """设置PHP站点特定表单."""
-        php_group = QGroupBox("PHP设置")
+        php_group = QGroupBox(self.language_manager.get("php_settings"))
         php_layout = QVBoxLayout()
         php_layout.setSpacing(8)
         
         # PHP-FPM连接方式
         mode_layout = QHBoxLayout()
         self.php_mode_combo = QComboBox()
-        self.php_mode_combo.addItems(["Unix Socket", "TCP"])
+        self.php_mode_combo.addItems([self.language_manager.get("unix_socket"), self.language_manager.get("tcp")])
         self.php_mode_combo.currentIndexChanged.connect(self._on_php_mode_changed)
         mode_layout.addWidget(self.php_mode_combo)
         mode_layout.addStretch()
@@ -325,13 +332,13 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         tcp_layout.setContentsMargins(0, 0, 0, 0)
         
         self.php_host_edit = QLineEdit("127.0.0.1")
-        tcp_layout.addWidget(QLabel("主机:"))
+        tcp_layout.addWidget(QLabel(self.language_manager.get("php_host")))
         tcp_layout.addWidget(self.php_host_edit)
         
         self.php_port_spin = QSpinBox()
         self.php_port_spin.setRange(1, 65535)
         self.php_port_spin.setValue(9000)
-        tcp_layout.addWidget(QLabel("端口:"))
+        tcp_layout.addWidget(QLabel(self.language_manager.get("php_port")))
         tcp_layout.addWidget(self.php_port_spin)
         
         php_layout.addWidget(tcp_widget)
@@ -340,16 +347,16 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         layout.addWidget(php_group)
         
         # 网站根目录
-        root_group = QGroupBox("网站设置")
+        root_group = QGroupBox(self.language_manager.get("static_settings"))
         root_layout = QFormLayout()
         
         root_path_layout = QHBoxLayout()
         self.root_edit = QLineEdit()
-        self.root_browse_btn = QPushButton("浏览")
+        self.root_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.root_browse_btn.clicked.connect(self._browse_root)
         root_path_layout.addWidget(self.root_edit)
         root_path_layout.addWidget(self.root_browse_btn)
-        root_layout.addRow("网站根目录:", root_path_layout)
+        root_layout.addRow(self.language_manager.get("root_dir"), root_path_layout)
         
         root_group.setLayout(root_layout)
         layout.addWidget(root_group)
@@ -411,7 +418,7 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         """浏览根目录."""
         directory = QFileDialog.getExistingDirectory(
             self,
-            "选择网站根目录",
+            self.language_manager.get("root_dir").rstrip(":"),
             self.root_edit.text() or ""
         )
         if directory:
@@ -423,26 +430,28 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
     
     def __init__(self, main_viewmodel, parent=None):
         """初始化反向代理对话框."""
-        super().__init__(main_viewmodel, "反向代理配置", parent)
+        super().__init__(main_viewmodel, "", parent)
+        # Set the title after initialization to use the language manager
+        self.setWindowTitle(self.language_manager.get("proxy_site_config"))
     
     def _setup_specific_form(self, layout):
         """设置反向代理特定表单."""
-        proxy_group = QGroupBox("反向代理设置")
+        proxy_group = QGroupBox(self.language_manager.get("proxy_settings"))
         proxy_layout = QFormLayout()
         proxy_layout.setSpacing(8)
         
         # 后端地址
         self.proxy_url_edit = QLineEdit()
-        self.proxy_url_edit.setPlaceholderText("http://localhost:8080")
-        proxy_layout.addRow("后端地址:", self.proxy_url_edit)
+        self.proxy_url_edit.setPlaceholderText(self.language_manager.get("backend_placeholder"))
+        proxy_layout.addRow(self.language_manager.get("backend_url"), self.proxy_url_edit)
         
         # 路径前缀
         self.location_edit = QLineEdit("/")
         self.location_edit.setPlaceholderText("/")
-        proxy_layout.addRow("路径前缀:", self.location_edit)
+        proxy_layout.addRow(self.language_manager.get("location_path"), self.location_edit)
         
         # WebSocket支持
-        self.websocket_check = QCheckBox("启用WebSocket支持")
+        self.websocket_check = QCheckBox(self.language_manager.get("websocket_support"))
         self.websocket_check.setToolTip("为WebSocket应用启用升级支持")
         proxy_layout.addRow("", self.websocket_check)
         

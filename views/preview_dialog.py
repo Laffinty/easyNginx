@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+from utils.language_manager import LanguageManager
 
 
 class ConfigPreviewDialog(QDialog):
@@ -19,24 +20,25 @@ class ConfigPreviewDialog(QDialog):
         """初始化预览对话框."""
         super().__init__(parent)
         self.config_content = config_content
+        self.language_manager = LanguageManager()
         
         self._setup_ui()
         
     def _setup_ui(self):
         """设置UI."""
-        self.setWindowTitle("Nginx配置预览")
+        self.setWindowTitle(self.language_manager.get("preview_dialog_title"))
         self.resize(800, 600)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         
         # 标题
-        title = QLabel("Nginx配置预览")
+        title = QLabel(self.language_manager.get("preview_dialog_title"))
         title.setStyleSheet("font-size: 14pt; font-weight: 600;")
         layout.addWidget(title)
         
         # 说明
-        desc = QLabel("以下是为当前站点生成的Nginx配置代码（已自动注入性能基线和安全加固）")
+        desc = QLabel(self.language_manager.get("preview_dialog_description"))
         desc.setWordWrap(True)
         layout.addWidget(desc)
         
@@ -56,13 +58,13 @@ class ConfigPreviewDialog(QDialog):
         # 按钮区域
         button_layout = QHBoxLayout()
         
-        self.copy_btn = QPushButton("复制配置")
+        self.copy_btn = QPushButton(self.language_manager.get("copy_config"))
         self.copy_btn.clicked.connect(self._copy_config)
         button_layout.addWidget(self.copy_btn)
         
         button_layout.addStretch()
         
-        self.close_btn = QPushButton("关闭")
+        self.close_btn = QPushButton(self.language_manager.get("close"))
         self.close_btn.clicked.connect(self.accept)
         button_layout.addWidget(self.close_btn)
         
@@ -81,7 +83,7 @@ class ConfigPreviewDialog(QDialog):
         """复制配置到剪贴板."""
         self.config_edit.selectAll()
         self.config_edit.copy()
-        self.copy_btn.setText("已复制！")
+        self.copy_btn.setText(self.language_manager.get("copied"))
         
     def showEvent(self, event):
         """显示事件."""
