@@ -126,6 +126,9 @@
   "takeover_failed": "接管失敗",
   "takeover_error_occurred": "接管過程中出現錯誤",
   
+  "about_title": "關於 easyNginx",
+  "about_content": "\n        <h2>easyNginx v1.0</h2>\n        <p>版權所有 &copy; 2026 Laffinty</p>\n        <hr>\n        <p><b>授權條款：</b> MIT License</p>\n        <p>本軟體採用 MIT 授權條款發布。</p>\n            ",
+  
   "start": "啟動",
   "stop": "停止", 
   "reload": "重新載入",

@@ -121,6 +121,9 @@
   "takeover_failed": "引き継ぎ失敗",
   "takeover_error_occurred": "引き継ぎプロセス中にエラーが発生しました",
   
+  "about_title": "easyNginxについて",
+  "about_content": "\n        <h2>easyNginx v1.0</h2>\n        <p>著作権 &copy; 2026 Laffinty</p>\n        <hr>\n        <p><b>ライセンス：</b> MIT License</p>\n        <p>本ソフトウェアは MIT ライセンスの下でリリースされています。</p>\n            ",
+  
   "start": "起動",
   "stop": "停止", 
   "reload": "リロード",

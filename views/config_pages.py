@@ -20,10 +20,11 @@ class BaseConfigPage(QWidget):
     config_saved = Signal()
     preview_requested = Signal()
     
-    def __init__(self, main_viewmodel, page_title: str):
+    def __init__(self, main_viewmodel, page_title: str, language_manager):
         """初始化配置页面."""
         super().__init__()
         self.main_viewmodel = main_viewmodel
+        self.language_manager = language_manager
         self.page_title = page_title
         self.original_site_name: str = ""
         
@@ -68,7 +69,7 @@ class BaseConfigPage(QWidget):
         preview_layout = QVBoxLayout(preview_container)
         preview_layout.setContentsMargins(0, 0, 0, 0)
         
-        preview_title = QLabel("配置预览")
+        preview_title = QLabel(self.language_manager.get("preview_title"))
         preview_title.setStyleSheet("font-size: 12pt; font-weight: 600;")
         preview_layout.addWidget(preview_title)
         
@@ -80,11 +81,11 @@ class BaseConfigPage(QWidget):
         
         preview_controls = QHBoxLayout()
         
-        self.update_preview_btn = QPushButton("更新预览")
+        self.update_preview_btn = QPushButton(self.language_manager.get("update_preview"))
         self.update_preview_btn.clicked.connect(self._update_preview)
         preview_controls.addWidget(self.update_preview_btn)
         
-        self.copy_btn = QPushButton("复制配置")
+        self.copy_btn = QPushButton(self.language_manager.get("copy_config"))
         self.copy_btn.clicked.connect(self._copy_config)
         preview_controls.addWidget(self.copy_btn)
         
@@ -94,14 +95,14 @@ class BaseConfigPage(QWidget):
     
     def _setup_common_form(self, layout):
         """设置通用表单."""
-        common_group = QGroupBox("基础配置")
+        common_group = QGroupBox(self.language_manager.get("basic_config"))
         common_layout = QFormLayout()
         common_layout.setSpacing(8)
         
         # 站点名称
         self.site_name_edit = QLineEdit()
-        self.site_name_edit.setPlaceholderText("输入站点名称")
-        common_layout.addRow("站点名称:", self.site_name_edit)
+        self.site_name_edit.setPlaceholderText(self.language_manager.get("site_name_placeholder"))
+        common_layout.addRow(self.language_manager.get("site_name") + ":", self.site_name_edit)
         
         # 监听端口
         port_layout = QHBoxLayout()
@@ -110,26 +111,26 @@ class BaseConfigPage(QWidget):
         self.port_spin.setValue(80)
         port_layout.addWidget(self.port_spin)
         port_layout.addStretch()
-        common_layout.addRow("监听端口:", port_layout)
+        common_layout.addRow(self.language_manager.get("listen_port") + ":", port_layout)
         
         # 服务器名称
         self.server_name_edit = QLineEdit()
-        self.server_name_edit.setPlaceholderText("localhost 或域名")
-        common_layout.addRow("服务器名称:", self.server_name_edit)
+        self.server_name_edit.setPlaceholderText(self.language_manager.get("server_name_placeholder"))
+        common_layout.addRow(self.language_manager.get("server_name") + ":", self.server_name_edit)
         
         common_group.setLayout(common_layout)
         layout.addWidget(common_group)
     
     def _setup_https_form(self, layout):
         """设置HTTPS表单."""
-        https_group = QGroupBox("HTTPS配置")
+        https_group = QGroupBox(self.language_manager.get("https_config"))
         https_layout = QVBoxLayout()
         https_layout.setSpacing(8)
         
         # HTTPS开关
         https_switch_layout = QHBoxLayout()
-        self.https_check = QCheckBox("启用HTTPS")
-        self.https_check.setToolTip("启用HTTPS需要SSL证书")
+        self.https_check = QCheckBox(self.language_manager.get("enable_https"))
+        self.https_check.setToolTip(self.language_manager.get("https_tooltip"))
         self.https_check.stateChanged.connect(self._on_https_toggled)
         https_switch_layout.addWidget(self.https_check)
         https_switch_layout.addStretch()
@@ -138,11 +139,11 @@ class BaseConfigPage(QWidget):
         # SSL证书路径
         cert_layout = QHBoxLayout()
         self.ssl_cert_edit = QLineEdit()
-        self.ssl_cert_edit.setPlaceholderText("选择SSL证书文件 (.crt/.pem)")
+        self.ssl_cert_edit.setPlaceholderText(self.language_manager.get("ssl_cert_placeholder"))
         self.ssl_cert_edit.setEnabled(False)
         cert_layout.addWidget(self.ssl_cert_edit)
         
-        self.cert_browse_btn = QPushButton("浏览")
+        self.cert_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.cert_browse_btn.setEnabled(False)
         self.cert_browse_btn.clicked.connect(self._browse_cert)
         cert_layout.addWidget(self.cert_browse_btn)
@@ -151,11 +152,11 @@ class BaseConfigPage(QWidget):
         # SSL私钥路径
         key_layout = QHBoxLayout()
         self.ssl_key_edit = QLineEdit()
-        self.ssl_key_edit.setPlaceholderText("选择SSL私钥文件 (.key)")
+        self.ssl_key_edit.setPlaceholderText(self.language_manager.get("ssl_key_placeholder"))
         self.ssl_key_edit.setEnabled(False)
         key_layout.addWidget(self.ssl_key_edit)
         
-        self.key_browse_btn = QPushButton("浏览")
+        self.key_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.key_browse_btn.setEnabled(False)
         self.key_browse_btn.clicked.connect(self._browse_key)
         key_layout.addWidget(self.key_browse_btn)
@@ -170,19 +171,19 @@ class BaseConfigPage(QWidget):
         button_layout.setSpacing(8)
         
         # 左对齐：预览按钮
-        self.preview_btn = QPushButton("预览配置")
-        self.preview_btn.setToolTip("预览即将生成的Nginx配置")
+        self.preview_btn = QPushButton(self.language_manager.get("preview_config"))
+        self.preview_btn.setToolTip(self.language_manager.get("preview_tooltip"))
         self.preview_btn.clicked.connect(self.preview_requested.emit)
         button_layout.addWidget(self.preview_btn)
         
         button_layout.addStretch()
         
         # 右对齐：保存/取消
-        self.cancel_btn = QPushButton("取消")
+        self.cancel_btn = QPushButton(self.language_manager.get("cancel"))
         self.cancel_btn.clicked.connect(self._on_cancel)
         button_layout.addWidget(self.cancel_btn)
         
-        self.save_btn = QPushButton("保存并应用")
+        self.save_btn = QPushButton(self.language_manager.get("save_apply"))
         self.save_btn.setStyleSheet("font-weight: 600;")
         self.save_btn.clicked.connect(self._on_save)
         button_layout.addWidget(self.save_btn)
@@ -239,9 +240,9 @@ class BaseConfigPage(QWidget):
         """浏览证书."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择SSL证书",
+            self.language_manager.get("select_ssl_cert"),
             "",
-            "证书文件 (*.crt *.pem *.cer);;所有文件 (*.*)"
+            self.language_manager.get("cert_filter")
         )
         if file_path:
             self.ssl_cert_edit.setText(file_path)
@@ -250,9 +251,9 @@ class BaseConfigPage(QWidget):
         """浏览私钥."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择SSL私钥",
+            self.language_manager.get("select_ssl_key"),
             "",
-            "密钥文件 (*.key *.pem);;所有文件 (*.*)"
+            self.language_manager.get("key_filter")
         )
         if file_path:
             self.ssl_key_edit.setText(file_path)
@@ -276,9 +277,9 @@ class BaseConfigPage(QWidget):
                 config_content = self.main_viewmodel.config_generator.generate_config(config)
                 self.preview_text.setPlainText(config_content)
             else:
-                self.preview_text.setPlainText("配置无效，请检查输入")
+                self.preview_text.setPlainText(self.language_manager.get("invalid_config"))
         except Exception as e:
-            self.preview_text.setPlainText(f"配置生成错误: {str(e)}")
+            self.preview_text.setPlainText(self.language_manager.get("config_error") + f": {str(e)}")
     
     def _copy_config(self):
         """复制配置到剪贴板."""
@@ -299,31 +300,31 @@ class BaseConfigPage(QWidget):
 class StaticSitePage(BaseConfigPage):
     """静态站点配置页面."""
     
-    def __init__(self, main_viewmodel):
+    def __init__(self, main_viewmodel, language_manager):
         """初始化静态站点页面."""
-        super().__init__(main_viewmodel, "静态站点配置")
+        super().__init__(main_viewmodel, language_manager.get("static_site_config"), language_manager)
     
     def _setup_specific_form(self, layout):
         """设置静态站点特定表单."""
-        specific_group = QGroupBox("静态站点设置")
+        specific_group = QGroupBox(self.language_manager.get("static_settings"))
         specific_layout = QFormLayout()
         specific_layout.setSpacing(8)
         
         # 网站根目录
         root_layout = QHBoxLayout()
         self.root_edit = QLineEdit()
-        self.root_edit.setPlaceholderText("选择网站根目录")
+        self.root_edit.setPlaceholderText(self.language_manager.get("root_placeholder"))
         root_layout.addWidget(self.root_edit)
         
-        self.root_browse_btn = QPushButton("浏览")
+        self.root_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.root_browse_btn.clicked.connect(self._browse_root)
         root_layout.addWidget(self.root_browse_btn)
-        specific_layout.addRow("网站根目录:", root_layout)
+        specific_layout.addRow(self.language_manager.get("root_dir"), root_layout)
         
         # 索引文件
         self.index_edit = QLineEdit("index.html")
-        self.index_edit.setPlaceholderText("index.html")
-        specific_layout.addRow("索引文件:", self.index_edit)
+        self.index_edit.setPlaceholderText(self.language_manager.get("index_placeholder"))
+        specific_layout.addRow(self.language_manager.get("index_file"), self.index_edit)
         
         specific_group.setLayout(specific_layout)
         layout.addWidget(specific_group)
@@ -371,7 +372,7 @@ class StaticSitePage(BaseConfigPage):
         """浏览根目录."""
         directory = QFileDialog.getExistingDirectory(
             self,
-            "选择网站根目录",
+            self.language_manager.get("select_root_dir"),
             self.root_edit.text() or ""
         )
         if directory:
@@ -381,20 +382,20 @@ class StaticSitePage(BaseConfigPage):
 class PHPSitePage(BaseConfigPage):
     """PHP站点配置页面."""
     
-    def __init__(self, main_viewmodel):
+    def __init__(self, main_viewmodel, language_manager):
         """初始化PHP站点页面."""
-        super().__init__(main_viewmodel, "PHP站点配置")
+        super().__init__(main_viewmodel, language_manager.get("php_site_config"), language_manager)
     
     def _setup_specific_form(self, layout):
         """设置PHP站点特定表单."""
-        php_group = QGroupBox("PHP设置")
+        php_group = QGroupBox(self.language_manager.get("php_settings"))
         php_layout = QVBoxLayout()
         php_layout.setSpacing(8)
         
         # PHP-FPM连接方式
         mode_layout = QHBoxLayout()
         self.php_mode_combo = QComboBox()
-        self.php_mode_combo.addItems(["Unix Socket", "TCP"])
+        self.php_mode_combo.addItems([self.language_manager.get("unix_socket"), self.language_manager.get("tcp")])
         self.php_mode_combo.currentIndexChanged.connect(self._on_php_mode_changed)
         mode_layout.addWidget(self.php_mode_combo)
         mode_layout.addStretch()
@@ -412,13 +413,13 @@ class PHPSitePage(BaseConfigPage):
         tcp_layout.setContentsMargins(0, 0, 0, 0)
         
         self.php_host_edit = QLineEdit("127.0.0.1")
-        tcp_layout.addWidget(QLabel("主机:"))
+        tcp_layout.addWidget(QLabel(self.language_manager.get("php_host")))
         tcp_layout.addWidget(self.php_host_edit)
         
         self.php_port_spin = QSpinBox()
         self.php_port_spin.setRange(1, 65535)
         self.php_port_spin.setValue(9000)
-        tcp_layout.addWidget(QLabel("端口:"))
+        tcp_layout.addWidget(QLabel(self.language_manager.get("php_port")))
         tcp_layout.addWidget(self.php_port_spin)
         
         php_layout.addWidget(tcp_widget)
@@ -427,16 +428,16 @@ class PHPSitePage(BaseConfigPage):
         layout.addWidget(php_group)
         
         # 网站根目录
-        root_group = QGroupBox("网站设置")
+        root_group = QGroupBox(self.language_manager.get("website_settings"))
         root_layout = QFormLayout()
         
         root_path_layout = QHBoxLayout()
         self.root_edit = QLineEdit()
-        self.root_browse_btn = QPushButton("浏览")
+        self.root_browse_btn = QPushButton(self.language_manager.get("browse"))
         self.root_browse_btn.clicked.connect(self._browse_root)
         root_path_layout.addWidget(self.root_edit)
         root_path_layout.addWidget(self.root_browse_btn)
-        root_layout.addRow("网站根目录:", root_path_layout)
+        root_layout.addRow(self.language_manager.get("root_dir"), root_path_layout)
         
         root_group.setLayout(root_layout)
         layout.addWidget(root_group)
@@ -506,7 +507,7 @@ class PHPSitePage(BaseConfigPage):
         """浏览根目录."""
         directory = QFileDialog.getExistingDirectory(
             self,
-            "选择网站根目录",
+            self.language_manager.get("select_root_dir"),
             self.root_edit.text() or ""
         )
         if directory:
@@ -516,29 +517,29 @@ class PHPSitePage(BaseConfigPage):
 class ProxySitePage(BaseConfigPage):
     """反向代理配置页面."""
     
-    def __init__(self, main_viewmodel):
+    def __init__(self, main_viewmodel, language_manager):
         """初始化反向代理页面."""
-        super().__init__(main_viewmodel, "反向代理配置")
+        super().__init__(main_viewmodel, language_manager.get("proxy_site_config"), language_manager)
     
     def _setup_specific_form(self, layout):
         """设置反向代理特定表单."""
-        proxy_group = QGroupBox("反向代理设置")
+        proxy_group = QGroupBox(self.language_manager.get("proxy_settings"))
         proxy_layout = QFormLayout()
         proxy_layout.setSpacing(8)
         
         # 后端地址
         self.proxy_url_edit = QLineEdit()
-        self.proxy_url_edit.setPlaceholderText("http://localhost:8080")
-        proxy_layout.addRow("后端地址:", self.proxy_url_edit)
+        self.proxy_url_edit.setPlaceholderText(self.language_manager.get("backend_placeholder"))
+        proxy_layout.addRow(self.language_manager.get("backend_url"), self.proxy_url_edit)
         
         # 路径前缀
         self.location_edit = QLineEdit("/")
         self.location_edit.setPlaceholderText("/")
-        proxy_layout.addRow("路径前缀:", self.location_edit)
+        proxy_layout.addRow(self.language_manager.get("location_path"), self.location_edit)
         
         # WebSocket支持
-        self.websocket_check = QCheckBox("启用WebSocket支持")
-        self.websocket_check.setToolTip("为WebSocket应用启用升级支持")
+        self.websocket_check = QCheckBox(self.language_manager.get("websocket_support"))
+        self.websocket_check.setToolTip(self.language_manager.get("websocket_tooltip"))
         proxy_layout.addRow("", self.websocket_check)
         
         proxy_group.setLayout(proxy_layout)

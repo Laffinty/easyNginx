@@ -158,20 +158,10 @@ class LanguageManager(QObject):
             "about_title": "About easyNginx",
             "about_content": """
         <h2>easyNginx v1.0</h2>
-        <p><b>专业Nginx管理工具</b></p>
-        <p>基于MIT许可证发布</p>
+        <p>Copyright &copy; 2026 Laffinty</p>
         <hr>
-        <p><b>主要功能：</b></p>
-        <ul>
-            <li>纯静态站点、PHP动态站点、反向代理三种配置模式</li>
-            <li>F5/CIS Nginx最佳实践优化</li>
-            <li>HTTPS双向认证与安全加固</li>
-        </ul>
-        <hr>
-        <p><b>技术栈：</b> Python 3.11+, PySide6</p>
-        <p><b>许可证：</b> MIT License</p>
-        <hr>
-        <p>Copyright (c) 2026 Laffinty</p>
+        <p><b>License:</b> MIT License</p>
+        <p>This software is released under the MIT License.</p>
             """,
             "app_name": "easyNginx",
             

@@ -121,6 +121,9 @@
   "takeover_failed": "인수 실패",
   "takeover_error_occurred": "인수 과정에서 오류가 발생했습니다",
   
+  "about_title": "easyNginx 정보",
+  "about_content": "\n        <h2>easyNginx v1.0</h2>\n        <p>저작권 &copy; 2026 Laffinty</p>\n        <hr>\n        <p><b>라이선스:</b> MIT License</p>\n        <p>본 소프트웨어는 MIT 라이선스 하에 배포됩니다.</p>\n            ",
+  
   "start": "시작",
   "stop": "중지", 
   "reload": "다시 로드",
