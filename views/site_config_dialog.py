@@ -1,0 +1,485 @@
+"""Site configuration dialog for creating and editing sites."""
+
+from PySide6.QtWidgets import (
+    QDialog, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, 
+    QLineEdit, QPushButton, QCheckBox, QLabel, QFileDialog,
+    QGroupBox, QComboBox, QSpinBox, QDialogButtonBox
+)
+from PySide6.QtCore import Qt, Slot
+from loguru import logger
+from models.site_config import SiteConfigBase, StaticSiteConfig, PHPSiteConfig, ProxySiteConfig
+
+
+class BaseSiteConfigDialog(QDialog):
+    """
+    站点配置对话框基类
+    
+    提供通用表单和配置管理功能
+    """
+    
+    def __init__(self, main_viewmodel, dialog_title: str, parent=None):
+        """初始化配置对话框."""
+        super().__init__(parent)
+        self.main_viewmodel = main_viewmodel
+        self.dialog_title = dialog_title
+        self.original_site_name: str = ""
+        
+        self._setup_ui()
+        self._connect_signals()
+        
+    def _setup_ui(self):
+        """设置UI."""
+        self.setWindowTitle(self.dialog_title)
+        self.setMinimumSize(600, 500)
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(12)
+        
+        # 标题
+        title = QLabel(self.dialog_title)
+        title.setStyleSheet("font-size: 16pt; font-weight: 600;")
+        main_layout.addWidget(title)
+        
+        # 通用配置区域
+        self._setup_common_form(main_layout)
+        
+        # 特定配置区域（由子类实现）
+        self._setup_specific_form(main_layout)
+        
+        # HTTPS配置区域
+        self._setup_https_form(main_layout)
+        
+        # 按钮区域
+        button_box = QDialogButtonBox()
+        self.save_btn = button_box.addButton("保存并应用", QDialogButtonBox.AcceptRole)
+        self.save_btn.setStyleSheet("font-weight: 600;")
+        
+        self.cancel_btn = button_box.addButton("取消", QDialogButtonBox.RejectRole)
+        button_box.rejected.connect(self.reject)
+        
+        main_layout.addWidget(button_box)
+        
+        # 添加强制优化提示
+        tip_label = QLabel("* 所有配置将自动应用F5/CIS Nginx最佳实践优化")
+        tip_label.setStyleSheet("color: #666; font-size: 9pt;")
+        main_layout.addWidget(tip_label)
+        
+    def _setup_common_form(self, layout):
+        """设置通用表单."""
+        common_group = QGroupBox("基础配置")
+        common_layout = QFormLayout()
+        common_layout.setSpacing(8)
+        
+        # 站点名称
+        self.site_name_edit = QLineEdit()
+        self.site_name_edit.setPlaceholderText("输入站点名称")
+        common_layout.addRow("站点名称:", self.site_name_edit)
+        
+        # 监听端口
+        port_layout = QHBoxLayout()
+        self.port_spin = QSpinBox()
+        self.port_spin.setRange(1, 65535)
+        self.port_spin.setValue(80)
+        port_layout.addWidget(self.port_spin)
+        port_layout.addStretch()
+        common_layout.addRow("监听端口:", port_layout)
+        
+        # 服务器名称
+        self.server_name_edit = QLineEdit()
+        self.server_name_edit.setPlaceholderText("localhost 或域名")
+        common_layout.addRow("服务器名称:", self.server_name_edit)
+        
+        common_group.setLayout(common_layout)
+        layout.addWidget(common_group)
+        
+    def _setup_https_form(self, layout):
+        """设置HTTPS表单."""
+        https_group = QGroupBox("HTTPS配置")
+        https_layout = QVBoxLayout()
+        https_layout.setSpacing(8)
+        
+        # HTTPS开关
+        https_switch_layout = QHBoxLayout()
+        self.https_check = QCheckBox("启用HTTPS")
+        self.https_check.setToolTip("启用HTTPS需要SSL证书")
+        self.https_check.stateChanged.connect(self._on_https_toggled)
+        https_switch_layout.addWidget(self.https_check)
+        https_switch_layout.addStretch()
+        https_layout.addLayout(https_switch_layout)
+        
+        # SSL证书路径
+        cert_layout = QHBoxLayout()
+        self.ssl_cert_edit = QLineEdit()
+        self.ssl_cert_edit.setPlaceholderText("选择SSL证书文件 (.crt/.pem)")
+        self.ssl_cert_edit.setEnabled(False)
+        cert_layout.addWidget(self.ssl_cert_edit)
+        
+        self.cert_browse_btn = QPushButton("浏览")
+        self.cert_browse_btn.setEnabled(False)
+        self.cert_browse_btn.clicked.connect(self._browse_cert)
+        cert_layout.addWidget(self.cert_browse_btn)
+        https_layout.addLayout(cert_layout)
+        
+        # SSL私钥路径
+        key_layout = QHBoxLayout()
+        self.ssl_key_edit = QLineEdit()
+        self.ssl_key_edit.setPlaceholderText("选择SSL私钥文件 (.key)")
+        self.ssl_key_edit.setEnabled(False)
+        key_layout.addWidget(self.ssl_key_edit)
+        
+        self.key_browse_btn = QPushButton("浏览")
+        self.key_browse_btn.setEnabled(False)
+        self.key_browse_btn.clicked.connect(self._browse_key)
+        key_layout.addWidget(self.key_browse_btn)
+        https_layout.addLayout(key_layout)
+        
+        https_group.setLayout(https_layout)
+        layout.addWidget(https_group)
+        
+    def _connect_signals(self):
+        """连接信号."""
+        # 保存按钮
+        self.save_btn.clicked.connect(self._on_save)
+        
+    # 抽象方法（由子类实现）
+    def _setup_specific_form(self, layout):
+        """设置特定表单（子类实现）."""
+        pass
+    
+    def get_config(self) -> SiteConfigBase:
+        """获取配置（子类实现）."""
+        pass
+    
+    def load_site(self, site_config: SiteConfigBase):
+        """加载站点（子类实现）."""
+        pass
+    
+    def new_site(self):
+        """新建站点."""
+        self.original_site_name = ""
+        self._clear_fields()
+        
+    def is_editing(self) -> bool:
+        """是否在编辑模式."""
+        return bool(self.original_site_name)
+    
+    def get_original_site_name(self) -> str:
+        """获取原始站点名称."""
+        return self.original_site_name
+    
+    # 槽函数
+    def _on_https_toggled(self, state):
+        """HTTPS开关切换."""
+        enabled = state == Qt.Checked
+        self.ssl_cert_edit.setEnabled(enabled)
+        self.ssl_key_edit.setEnabled(enabled)
+        self.cert_browse_btn.setEnabled(enabled)
+        self.key_browse_btn.setEnabled(enabled)
+        
+    def _browse_cert(self):
+        """浏览证书."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择SSL证书",
+            "",
+            "证书文件 (*.crt *.pem *.cer);;所有文件 (*.*)"
+        )
+        if file_path:
+            self.ssl_cert_edit.setText(file_path)
+    
+    def _browse_key(self):
+        """浏览私钥."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择SSL私钥",
+            "",
+            "密钥文件 (*.key *.pem);;所有文件 (*.*)"
+        )
+        if file_path:
+            self.ssl_key_edit.setText(file_path)
+    
+    def _on_save(self):
+        """保存配置."""
+        config = self.get_config()
+        if config:
+            self.accept()
+    
+    def _clear_fields(self):
+        """清空表单."""
+        self.site_name_edit.clear()
+        self.port_spin.setValue(80)
+        self.server_name_edit.setText("localhost")
+        self.https_check.setChecked(False)
+        self.ssl_cert_edit.clear()
+        self.ssl_key_edit.clear()
+
+
+class StaticSiteConfigDialog(BaseSiteConfigDialog):
+    """静态站点配置对话框."""
+    
+    def __init__(self, main_viewmodel, parent=None):
+        """初始化静态站点对话框."""
+        super().__init__(main_viewmodel, "静态站点配置", parent)
+    
+    def _setup_specific_form(self, layout):
+        """设置静态站点特定表单."""
+        specific_group = QGroupBox("静态站点设置")
+        specific_layout = QFormLayout()
+        specific_layout.setSpacing(8)
+        
+        # 网站根目录
+        root_layout = QHBoxLayout()
+        self.root_edit = QLineEdit()
+        self.root_edit.setPlaceholderText("选择网站根目录")
+        root_layout.addWidget(self.root_edit)
+        
+        self.root_browse_btn = QPushButton("浏览")
+        self.root_browse_btn.clicked.connect(self._browse_root)
+        root_layout.addWidget(self.root_browse_btn)
+        specific_layout.addRow("网站根目录:", root_layout)
+        
+        # 索引文件
+        self.index_edit = QLineEdit("index.html")
+        self.index_edit.setPlaceholderText("index.html")
+        specific_layout.addRow("索引文件:", self.index_edit)
+        
+        specific_group.setLayout(specific_layout)
+        layout.addWidget(specific_group)
+    
+    def get_config(self) -> StaticSiteConfig:
+        """获取静态站点配置."""
+        try:
+            return StaticSiteConfig(
+                site_name=self.site_name_edit.text(),
+                listen_port=self.port_spin.value(),
+                server_name=self.server_name_edit.text(),
+                enable_https=self.https_check.isChecked(),
+                ssl_cert_path=self.ssl_cert_edit.text() if self.https_check.isChecked() else None,
+                ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
+                root_path=self.root_edit.text(),
+                index_file=self.index_edit.text() or "index.html"
+            )
+        except Exception as e:
+            logger.error(f"Failed to create static config: {e}")
+            return None
+    
+    def load_site(self, site_config: StaticSiteConfig):
+        """加载站点."""
+        self.original_site_name = site_config.site_name
+        
+        self.site_name_edit.setText(site_config.site_name)
+        self.port_spin.setValue(site_config.listen_port)
+        self.server_name_edit.setText(site_config.server_name)
+        self.https_check.setChecked(site_config.enable_https)
+        
+        if site_config.enable_https:
+            self.ssl_cert_edit.setText(site_config.ssl_cert_path or "")
+            self.ssl_key_edit.setText(site_config.ssl_key_path or "")
+        
+        self.root_edit.setText(site_config.root_path)
+        self.index_edit.setText(site_config.index_file)
+    
+    def _browse_root(self):
+        """浏览根目录."""
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "选择网站根目录",
+            self.root_edit.text() or ""
+        )
+        if directory:
+            self.root_edit.setText(directory)
+
+
+class PHPSiteConfigDialog(BaseSiteConfigDialog):
+    """PHP站点配置对话框."""
+    
+    def __init__(self, main_viewmodel, parent=None):
+        """初始化PHP站点对话框."""
+        super().__init__(main_viewmodel, "PHP站点配置", parent)
+    
+    def _setup_specific_form(self, layout):
+        """设置PHP站点特定表单."""
+        php_group = QGroupBox("PHP设置")
+        php_layout = QVBoxLayout()
+        php_layout.setSpacing(8)
+        
+        # PHP-FPM连接方式
+        mode_layout = QHBoxLayout()
+        self.php_mode_combo = QComboBox()
+        self.php_mode_combo.addItems(["Unix Socket", "TCP"])
+        self.php_mode_combo.currentIndexChanged.connect(self._on_php_mode_changed)
+        mode_layout.addWidget(self.php_mode_combo)
+        mode_layout.addStretch()
+        php_layout.addLayout(mode_layout)
+        
+        # Socket配置
+        socket_layout = QHBoxLayout()
+        self.php_socket_edit = QLineEdit("/run/php/php-fpm.sock")
+        socket_layout.addWidget(self.php_socket_edit)
+        php_layout.addLayout(socket_layout)
+        
+        # TCP配置（初始隐藏）
+        tcp_widget = QWidget()
+        tcp_layout = QHBoxLayout(tcp_widget)
+        tcp_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.php_host_edit = QLineEdit("127.0.0.1")
+        tcp_layout.addWidget(QLabel("主机:"))
+        tcp_layout.addWidget(self.php_host_edit)
+        
+        self.php_port_spin = QSpinBox()
+        self.php_port_spin.setRange(1, 65535)
+        self.php_port_spin.setValue(9000)
+        tcp_layout.addWidget(QLabel("端口:"))
+        tcp_layout.addWidget(self.php_port_spin)
+        
+        php_layout.addWidget(tcp_widget)
+        
+        php_group.setLayout(php_layout)
+        layout.addWidget(php_group)
+        
+        # 网站根目录
+        root_group = QGroupBox("网站设置")
+        root_layout = QFormLayout()
+        
+        root_path_layout = QHBoxLayout()
+        self.root_edit = QLineEdit()
+        self.root_browse_btn = QPushButton("浏览")
+        self.root_browse_btn.clicked.connect(self._browse_root)
+        root_path_layout.addWidget(self.root_edit)
+        root_path_layout.addWidget(self.root_browse_btn)
+        root_layout.addRow("网站根目录:", root_path_layout)
+        
+        root_group.setLayout(root_layout)
+        layout.addWidget(root_group)
+    
+    def _on_php_mode_changed(self, index):
+        """PHP模式改变."""
+        is_unix = index == 0
+        self.php_socket_edit.setEnabled(is_unix)
+        self.php_host_edit.setEnabled(not is_unix)
+        self.php_port_spin.setEnabled(not is_unix)
+    
+    def get_config(self) -> PHPSiteConfig:
+        """获取PHP站点配置."""
+        try:
+            is_unix = self.php_mode_combo.currentIndex() == 0
+            
+            return PHPSiteConfig(
+                site_name=self.site_name_edit.text(),
+                listen_port=self.port_spin.value(),
+                server_name=self.server_name_edit.text(),
+                enable_https=self.https_check.isChecked(),
+                ssl_cert_path=self.ssl_cert_edit.text() if self.https_check.isChecked() else None,
+                ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
+                root_path=self.root_edit.text(),
+                php_fpm_mode="unix" if is_unix else "tcp",
+                php_fpm_socket=self.php_socket_edit.text() if is_unix else None,
+                php_fpm_host=self.php_host_edit.text() if not is_unix else None,
+                php_fpm_port=self.php_port_spin.value() if not is_unix else None
+            )
+        except Exception as e:
+            logger.error(f"Failed to create PHP config: {e}")
+            return None
+    
+    def load_site(self, site_config: PHPSiteConfig):
+        """加载站点."""
+        self.original_site_name = site_config.site_name
+        
+        self.site_name_edit.setText(site_config.site_name)
+        self.port_spin.setValue(site_config.listen_port)
+        self.server_name_edit.setText(site_config.server_name)
+        self.https_check.setChecked(site_config.enable_https)
+        
+        if site_config.enable_https:
+            self.ssl_cert_edit.setText(site_config.ssl_cert_path or "")
+            self.ssl_key_edit.setText(site_config.ssl_key_path or "")
+        
+        self.root_edit.setText(site_config.root_path)
+        
+        # PHP配置
+        if site_config.php_fpm_mode == "unix":
+            self.php_mode_combo.setCurrentIndex(0)
+            self.php_socket_edit.setText(site_config.php_fpm_socket or "/run/php/php-fpm.sock")
+        else:
+            self.php_mode_combo.setCurrentIndex(1)
+            self.php_host_edit.setText(site_config.php_fpm_host or "127.0.0.1")
+            self.php_port_spin.setValue(site_config.php_fpm_port or 9000)
+    
+    def _browse_root(self):
+        """浏览根目录."""
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "选择网站根目录",
+            self.root_edit.text() or ""
+        )
+        if directory:
+            self.root_edit.setText(directory)
+
+
+class ProxySiteConfigDialog(BaseSiteConfigDialog):
+    """反向代理配置对话框."""
+    
+    def __init__(self, main_viewmodel, parent=None):
+        """初始化反向代理对话框."""
+        super().__init__(main_viewmodel, "反向代理配置", parent)
+    
+    def _setup_specific_form(self, layout):
+        """设置反向代理特定表单."""
+        proxy_group = QGroupBox("反向代理设置")
+        proxy_layout = QFormLayout()
+        proxy_layout.setSpacing(8)
+        
+        # 后端地址
+        self.proxy_url_edit = QLineEdit()
+        self.proxy_url_edit.setPlaceholderText("http://localhost:8080")
+        proxy_layout.addRow("后端地址:", self.proxy_url_edit)
+        
+        # 路径前缀
+        self.location_edit = QLineEdit("/")
+        self.location_edit.setPlaceholderText("/")
+        proxy_layout.addRow("路径前缀:", self.location_edit)
+        
+        # WebSocket支持
+        self.websocket_check = QCheckBox("启用WebSocket支持")
+        self.websocket_check.setToolTip("为WebSocket应用启用升级支持")
+        proxy_layout.addRow("", self.websocket_check)
+        
+        proxy_group.setLayout(proxy_layout)
+        layout.addWidget(proxy_group)
+    
+    def get_config(self) -> ProxySiteConfig:
+        """获取反向代理配置."""
+        try:
+            return ProxySiteConfig(
+                site_name=self.site_name_edit.text(),
+                listen_port=self.port_spin.value(),
+                server_name=self.server_name_edit.text(),
+                enable_https=self.https_check.isChecked(),
+                ssl_cert_path=self.ssl_cert_edit.text() if self.https_check.isChecked() else None,
+                ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
+                proxy_pass_url=self.proxy_url_edit.text(),
+                location_path=self.location_edit.text() or "/",
+                enable_websocket=self.websocket_check.isChecked()
+            )
+        except Exception as e:
+            logger.error(f"Failed to create proxy config: {e}")
+            return None
+    
+    def load_site(self, site_config: ProxySiteConfig):
+        """加载站点."""
+        self.original_site_name = site_config.site_name
+        
+        self.site_name_edit.setText(site_config.site_name)
+        self.port_spin.setValue(site_config.listen_port)
+        self.server_name_edit.setText(site_config.server_name)
+        self.https_check.setChecked(site_config.enable_https)
+        
+        if site_config.enable_https:
+            self.ssl_cert_edit.setText(site_config.ssl_cert_path or "")
+            self.ssl_key_edit.setText(site_config.ssl_key_path or "")
+        
+        self.proxy_url_edit.setText(site_config.proxy_pass_url)
+        self.location_edit.setText(site_config.location_path)
+        self.websocket_check.setChecked(site_config.enable_websocket)

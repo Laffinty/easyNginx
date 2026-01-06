@@ -1,58 +1,62 @@
 """Theme management for UI theming."""
 
-from PySide6.QtCore import QObject, Signal, Property
+from PySide6.QtCore import QObject, Signal, Property, QTimer
 from PySide6.QtGui import QPalette, QColor, QGuiApplication
+from loguru import logger
 import darkdetect
 
 
 class ThemeManager(QObject):
     """
-    主题管理器
+    Theme manager - automatically follows system theme.
     
-    管理应用程序主题：亮色、暗色、高对比度
+    Automatically detects and applies system light/dark theme.
     """
     
-    theme_changed = Signal(str)  # 主题改变信号
+    theme_changed = Signal(str)  # Theme changed signal
     
-    THEMES = {
-        "light": "亮色主题",
-        "dark": "暗色主题", 
-        "high_contrast": "高对比度"
-    }
+    AVAILABLE_THEMES = ["light", "dark"]
     
     def __init__(self):
-        """初始化主题管理器."""
+        """Initialize theme manager."""
         super().__init__()
         self._current_theme = "light"
-        self._auto_detect = True
-        self._apply_theme("light")
+        self._theme_check_timer = QTimer()
+        self._theme_check_timer.setInterval(1000)  # Check every second
+        self._theme_check_timer.timeout.connect(self._check_system_theme_change)
+        self._theme_check_timer.start()
+        
+        # Apply initial theme
+        self._apply_initial_theme()
     
     @Property(str, notify=theme_changed)
     def current_theme(self) -> str:
-        """当前主题."""
+        """Current theme."""
         return self._current_theme
     
-    @current_theme.setter
-    def current_theme(self, theme: str):
-        """设置主题."""
-        if theme in self.THEMES and theme != self._current_theme:
-            self._current_theme = theme
-            self._auto_detect = False
-            self._apply_theme(theme)
-            self.theme_changed.emit(theme)
+    def _apply_initial_theme(self):
+        """Apply initial theme based on system."""
+        system_theme = self.detect_system_theme()
+        if system_theme != self._current_theme:
+            self._current_theme = system_theme
+            self._apply_theme(system_theme)
+            self.theme_changed.emit(system_theme)
     
-    @Property(bool, constant=True)
-    def auto_detect(self) -> bool:
-        """是否自动检测系统主题."""
-        return True
-    
-    @Property(list, constant=True)
-    def available_themes(self) -> list:
-        """可用主题列表."""
-        return list(self.THEMES.keys())
+    def _check_system_theme_change(self):
+        """Check if system theme has changed."""
+        try:
+            system_theme = self.detect_system_theme()
+            if system_theme != self._current_theme:
+                self._current_theme = system_theme
+                self._apply_theme(system_theme)
+                self.theme_changed.emit(system_theme)
+                logger.debug(f"System theme changed to: {system_theme}")
+        except Exception as e:
+            # Silently ignore errors in theme detection
+            pass
     
     def detect_system_theme(self):
-        """检测系统主题."""
+        """Detect system theme."""
         try:
             if darkdetect.isDark():
                 return "dark"

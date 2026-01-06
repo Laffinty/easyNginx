@@ -9,19 +9,27 @@ from models.nginx_status import NginxStatus, SiteListItem
 from services.nginx_service import NginxService
 from services.config_generator import ConfigGenerator
 from services.config_parser import ConfigParser
+from utils.language_manager import LanguageManager
 
 
 class MainViewModel(QObject):
     """
-    Main ViewModel - 主业务逻辑协调器
+    Main ViewModel - Main business logic coordinator
     
-    主要职责：
-    1. 协调各个ViewModel
-    2. 管理Nginx服务状态
-    3. 处理站点增删改查
-    4. 配置生成和部署
-    5. 错误处理和日志记录
+    Responsibilities:
+    1. Coordinate ViewModels
+    2. Manage Nginx service status
+    3. Handle site CRUD operations
+    4. Config generation and deployment
+    5. Error handling and logging
     """
+    
+    # Signal definitions
+    nginx_status_changed = Signal(NginxStatus)
+    site_list_changed = Signal(list)
+    config_generated = Signal(str)
+    operation_completed = Signal(bool, str)
+    error_occurred = Signal(str)
     
     # 信号定义
     nginx_status_changed = Signal(NginxStatus)
@@ -31,22 +39,23 @@ class MainViewModel(QObject):
     error_occurred = Signal(str)
     
     def __init__(self, nginx_path: Optional[str] = None, config_path: Optional[str] = None):
-        """初始化MainViewModel."""
+        """Initialize MainViewModel."""
         super().__init__()
         
-        # 初始化服务
+        # Initialize services
         self.nginx_service = NginxService(nginx_path, config_path)
         self.config_generator = ConfigGenerator()
         self.config_parser = ConfigParser()
+        self.language_manager = LanguageManager()
         
-        # 状态管理
+        # State management
         self.sites: List[SiteConfigBase] = []
         self.current_site: Optional[SiteConfigBase] = None
         self.nginx_status: Optional[NginxStatus] = None
         
-        # 定时器（用于状态监控）
+        # Timer (for status monitoring)
         self.status_timer = QTimer()
-        self.status_timer.setInterval(2000)  # 2秒检查一次
+        self.status_timer.setInterval(2000)  # Check every 2 seconds
         self.status_timer.timeout.connect(self._update_status)
         
         logger.info("MainViewModel initialized")

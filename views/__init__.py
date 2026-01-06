@@ -2,14 +2,14 @@
 
 from .main_window import MainWindow
 from .site_list_widget import SiteListWidget
-from .config_pages import StaticSitePage, PHPSitePage, ProxySitePage
+from .site_config_dialog import StaticSiteConfigDialog, PHPSiteConfigDialog, ProxySiteConfigDialog
 from .status_bar import StatusBar
 
 __all__ = [
     "MainWindow",
     "SiteListWidget",
-    "StaticSitePage",
-    "PHPSitePage", 
-    "ProxySitePage",
+    "StaticSiteConfigDialog",
+    "PHPSiteConfigDialog", 
+    "ProxySiteConfigDialog",
     "StatusBar"
 ]
