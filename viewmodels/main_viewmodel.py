@@ -13,6 +13,43 @@ from services.config_parser import ConfigParser
 from utils.language_manager import LanguageManager
 
 
+class StatusUpdateThread(QThread):
+    """
+    后台线程用于更新Nginx状态
+    避免阻塞GUI主线程
+    """
+    
+    status_updated = Signal(NginxStatus)
+    error_occurred = Signal(str)
+    
+    def __init__(self, nginx_service: NginxService):
+        """初始化状态更新线程."""
+        super().__init__()
+        self.nginx_service = nginx_service
+        self._running = True
+        self.interval = 2000  # 2秒间隔
+        
+    def run(self):
+        """线程主循环."""
+        while self._running:
+            try:
+                if self._running:  # 再次检查避免竞争条件
+                    status = self.nginx_service.get_status()
+                    self.status_updated.emit(status)
+            except Exception as e:
+                logger.error(f"Status update thread error: {e}")
+                self.error_occurred.emit(str(e))
+            
+            # 等待指定间隔
+            self.msleep(self.interval)
+    
+    def stop(self):
+        """停止线程."""
+        self._running = False
+        self.quit()
+        self.wait()
+
+
 class MainViewModel(QObject):
     """
     Main ViewModel - Main business logic coordinator
@@ -26,13 +63,6 @@ class MainViewModel(QObject):
     """
     
     # Signal definitions
-    nginx_status_changed = Signal(NginxStatus)
-    site_list_changed = Signal(list)
-    config_generated = Signal(str)
-    operation_completed = Signal(bool, str)
-    error_occurred = Signal(str)
-    
-    # 信号定义
     nginx_status_changed = Signal(NginxStatus)
     site_list_changed = Signal(list)
     config_generated = Signal(str)
@@ -54,10 +84,8 @@ class MainViewModel(QObject):
         self.current_site: Optional[SiteConfigBase] = None
         self.nginx_status: Optional[NginxStatus] = None
         
-        # Timer (for status monitoring)
-        self.status_timer = QTimer()
-        self.status_timer.setInterval(2000)  # Check every 2 seconds
-        self.status_timer.timeout.connect(self._update_status)
+        # 使用后台线程进行状态监控（替代QTimer）
+        self.status_thread: Optional[StatusUpdateThread] = None
         
         logger.info("MainViewModel initialized")
     
@@ -73,11 +101,9 @@ class MainViewModel(QObject):
         # 加载现有配置
         self.load_sites()
         
-        # 初始状态更新
-        self._update_status()
-        
-        # 启动定时器
-        self.status_timer.start()
+        # 启动后台状态监控线程（替代定时器）
+        # 线程会自动进行初始状态更新
+        self._start_status_monitoring()
         
         logger.info("MainViewModel initialized successfully")
         return True
@@ -85,16 +111,37 @@ class MainViewModel(QObject):
     def cleanup(self):
         """清理资源."""
         logger.info("Cleaning up MainViewModel...")
-        self.status_timer.stop()
+        self._stop_status_monitoring()
+    
+    def _start_status_monitoring(self):
+        """启动后台状态监控线程."""
+        if self.status_thread is None:
+            self.status_thread = StatusUpdateThread(self.nginx_service)
+            self.status_thread.status_updated.connect(self._on_status_updated)
+            self.status_thread.error_occurred.connect(self.error_occurred)
+            self.status_thread.start()
+            logger.info("Status monitoring thread started")
+    
+    def _stop_status_monitoring(self):
+        """停止后台状态监控线程."""
+        if self.status_thread is not None:
+            self.status_thread.stop()
+            self.status_thread = None
+            logger.info("Status monitoring thread stopped")
     
     def _update_status(self):
-        """更新Nginx状态."""
+        """手动更新Nginx状态（仅用于初始化）."""
         try:
             self.nginx_status = self.nginx_service.get_status()
             self.nginx_status_changed.emit(self.nginx_status)
         except Exception as e:
             logger.error(f"Failed to update status: {e}")
             self.error_occurred.emit(f"Status update failed: {e}")
+    
+    def _on_status_updated(self, status: NginxStatus):
+        """后台线程状态更新回调."""
+        self.nginx_status = status
+        self.nginx_status_changed.emit(status)
     
     def load_sites(self):
         """加载站点列表."""
@@ -124,16 +171,25 @@ class MainViewModel(QObject):
         """
         try:
             # 验证配置
-            if not site_config:
-                self.error_occurred.emit("Invalid site configuration")
+            if not site_config or not site_config.site_name or not site_config.site_name.strip():
+                self.error_occurred.emit("站点名称不能为空")
                 return False
+            
+            # 清理站点名称（移除首尾空格等）
+            site_config.site_name = site_config.site_name.strip()
+            
+            # 检查站点名称唯一性
+            for site in self.sites:
+                if site.site_name == site_config.site_name:
+                    self.error_occurred.emit(f"站点名称 '{site_config.site_name}' 已存在")
+                    return False
             
             # 检查端口冲突
             for site in self.sites:
                 if (site.listen_port == site_config.listen_port and 
                     site.server_name == site_config.server_name):
                     self.error_occurred.emit(
-                        f"Port {site_config.listen_port} already in use by {site.site_name}"
+                        f"端口 {site_config.listen_port} 已被 {site.site_name} 使用"
                     )
                     return False
             
@@ -143,15 +199,15 @@ class MainViewModel(QObject):
             # 生成配置
             if self._deploy_config():
                 self.load_sites()  # 重新加载列表
-                self.operation_completed.emit(True, f"Site '{site_config.site_name}' added successfully")
+                self.operation_completed.emit(True, f"站点 '{site_config.site_name}' 添加成功")
                 return True
             else:
                 self.sites.remove(site_config)  # 回滚
                 return False
                 
         except Exception as e:
-            logger.error(f"Failed to add site: {e}")
-            self.error_occurred.emit(f"Failed to add site: {e}")
+            logger.error(f"添加站点失败: {e}")
+            self.error_occurred.emit(f"添加站点失败: {e}")
             return False
     
     def update_site(self, old_site_name: str, site_config: SiteConfigBase) -> bool:

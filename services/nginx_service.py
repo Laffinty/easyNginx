@@ -349,9 +349,13 @@ class NginxService:
                     else:
                         worker_pids.append(proc.pid)
                     
-                    # Accumulate resource usage
+                    # Accumulate resource usage (non-blocking)
                     try:
-                        total_cpu += proc.cpu_percent(interval=0.1)
+                        # 使用非阻塞方式获取CPU使用率（不传入interval参数）
+                        cpu_percent = proc.cpu_percent(interval=None)
+                        if cpu_percent is not None:
+                            total_cpu += cpu_percent
+                        
                         total_memory += proc.memory_percent()
                         
                         if not memory_info:

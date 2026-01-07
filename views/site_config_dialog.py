@@ -234,6 +234,30 @@ class BaseSiteConfigDialog(QDialog):
         self.https_check.setChecked(False)
         self.ssl_cert_edit.clear()
         self.ssl_key_edit.clear()
+    
+    def _generate_unique_site_name(self, prefix: str) -> str:
+        """
+        生成唯一的站点名称
+        
+        Args:
+            prefix: 名称前缀，如 "static", "php", "proxy"
+            
+        Returns:
+            唯一的站点名称
+        """
+        base_name = f"{prefix}_site"
+        existing_names = {site.site_name for site in self.main_viewmodel.sites}
+        
+        # 如果没有冲突，直接使用基础名称
+        if base_name not in existing_names:
+            return base_name
+        
+        # 否则添加序号
+        counter = 1
+        while f"{base_name}_{counter}" in existing_names:
+            counter += 1
+        
+        return f"{base_name}_{counter}"
 
 
 class StaticSiteConfigDialog(BaseSiteConfigDialog):
@@ -273,8 +297,14 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
     def get_config(self) -> StaticSiteConfig:
         """获取静态站点配置."""
         try:
+            # 获取站点名称，如果为空则自动生成唯一名称
+            site_name = self.site_name_edit.text().strip()
+            if not site_name:
+                site_name = self._generate_unique_site_name("static")
+                self.site_name_edit.setText(site_name)  # 更新UI显示
+            
             return StaticSiteConfig(
-                site_name=self.site_name_edit.text(),
+                site_name=site_name,
                 listen_port=self.port_spin.value(),
                 server_name=self.server_name_edit.text(),
                 enable_https=self.https_check.isChecked(),
@@ -391,8 +421,14 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         try:
             is_unix = self.php_mode_combo.currentIndex() == 0
             
+            # 获取站点名称，如果为空则自动生成唯一名称
+            site_name = self.site_name_edit.text().strip()
+            if not site_name:
+                site_name = self._generate_unique_site_name("php")
+                self.site_name_edit.setText(site_name)
+            
             return PHPSiteConfig(
-                site_name=self.site_name_edit.text(),
+                site_name=site_name,
                 listen_port=self.port_spin.value(),
                 server_name=self.server_name_edit.text(),
                 enable_https=self.https_check.isChecked(),
@@ -479,8 +515,14 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
     def get_config(self) -> ProxySiteConfig:
         """获取反向代理配置."""
         try:
+            # 获取站点名称，如果为空则自动生成唯一名称
+            site_name = self.site_name_edit.text().strip()
+            if not site_name:
+                site_name = self._generate_unique_site_name("proxy")
+                self.site_name_edit.setText(site_name)
+            
             return ProxySiteConfig(
-                site_name=self.site_name_edit.text(),
+                site_name=site_name,
                 listen_port=self.port_spin.value(),
                 server_name=self.server_name_edit.text(),
                 enable_https=self.https_check.isChecked(),
