@@ -63,15 +63,13 @@ server {
     {% endif %}
     
     # 请求限制（防DDoS/爆破）
-    limit_req_zone $binary_remote_addr zone={{ site_name }}_req:10m rate=10r/s;
-    limit_conn_zone $binary_remote_addr zone={{ site_name }}_conn:10m;
     limit_req zone={{ site_name }}_req burst=20 nodelay;
     limit_conn {{ site_name }}_conn 20;
     
     # 缓冲区限制（防缓冲区溢出）
     client_body_buffer_size {{ common_security.client_body_buffer_size }};
     client_header_buffer_size {{ common_security.client_header_buffer_size }};
-    large_client_header_buffers {{ common_security.large_client_client_header_buffers }};
+    large_client_header_buffers {{ common_security.large_client_header_buffers }};
     
     # ============================================
     # 站点配置

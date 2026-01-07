@@ -2,6 +2,7 @@
 
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
+import platform
 from PySide6.QtCore import QObject, Signal, QThread, QTimer
 from loguru import logger
 from models.site_config import SiteConfigBase, create_site_config
@@ -302,6 +303,17 @@ class MainViewModel(QObject):
         config_parts.append("    default_type  application/octet-stream;")
         config_parts.append("")
         
+        # 添加请求限制区域定义（在所有server块之前）
+        # 使用集合跟踪已添加的区域，避免重复
+        added_zones = set()
+        for site in self.sites:
+            site_name = site.site_name.replace(" ", "_")
+            if site_name not in added_zones:
+                config_parts.append(f"    limit_req_zone $binary_remote_addr zone={site_name}_req:10m rate=10r/s;")
+                config_parts.append(f"    limit_conn_zone $binary_remote_addr zone={site_name}_conn:10m;")
+                added_zones.add(site_name)
+        config_parts.append("")
+        
         # 添加生成的server配置
         for site in self.sites:
             site_config = self.config_generator.generate_config(site)
@@ -332,18 +344,18 @@ error_log logs/error.log warn;
     
     def _get_events_config(self) -> str:
         """获取events配置."""
-        return """
-events {
+        # 根据操作系统选择事件模型
+        event_model = "select" if platform.system() == "Windows" else "epoll"
+        return f"""events {{
     # 每个worker的连接数
     worker_connections 1024;
     
     # 多连接接受
     multi_accept on;
     
-    # 使用epoll（Linux）或IOCP（Windows）
-    use epoll;
-}
-"""
+    # 使用select（Windows）或epoll（Linux）
+    use {event_model};
+}}"""
     
     def control_nginx(self, action: str) -> bool:
         """
