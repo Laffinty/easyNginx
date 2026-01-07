@@ -3,10 +3,10 @@
 from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
-    QMessageBox, QFileDialog, QDialog
+    QMessageBox, QFileDialog, QDialog, QSystemTrayIcon, QMenu
 )
-from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtCore import Qt, QTimer, Slot, QSize
+from PySide6.QtGui import QIcon, QAction, QPixmap, QPainter, QColor, QFont
 from loguru import logger
 from models.nginx_status import NginxStatus
 from viewmodels.main_viewmodel import MainViewModel
@@ -45,9 +45,14 @@ class MainWindow(QMainWindow):
         # Store language menu actions for radio behavior
         self.language_actions = {}
         
+        # System tray icon
+        self.tray_icon = None
+        self.tray_menu = None
+        
         # Initialize UI
         self._setup_ui()
         self._connect_signals()
+        self._setup_system_tray()
         
         logger.info("MainWindow initialized")
     
@@ -325,6 +330,107 @@ class MainWindow(QMainWindow):
         
         logger.info("UI text updated for new language")
     
+    def _setup_system_tray(self):
+        """设置系统托盘图标."""
+        # 检查系统是否支持托盘
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            logger.warning("System tray is not available")
+            return
+        
+        # 创建托盘图标
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # 设置图标（这里使用简单的文字图标，实际可以使用ICO文件）
+        # 创建一个简单的图标
+        pixmap = self._create_tray_icon_pixmap()
+        self.tray_icon.setIcon(QIcon(pixmap))
+        
+        # 创建托盘菜单
+        self.tray_menu = QMenu()
+        
+        # 显示/隐藏主窗口
+        show_action = QAction(self.language_manager.get("show_main_window"), self)
+        show_action.triggered.connect(self._show_hide_main_window)
+        self.tray_menu.addAction(show_action)
+        
+        # 启动Nginx
+        start_action = QAction(self.language_manager.get("start_nginx"), self)
+        start_action.triggered.connect(lambda: self.main_viewmodel.control_nginx("start"))
+        self.tray_menu.addAction(start_action)
+        
+        # 停止Nginx
+        stop_action = QAction(self.language_manager.get("stop_nginx"), self)
+        stop_action.triggered.connect(lambda: self.main_viewmodel.control_nginx("stop"))
+        self.tray_menu.addAction(stop_action)
+        
+        # 重载Nginx
+        reload_action = QAction(self.language_manager.get("reload_config"), self)
+        reload_action.triggered.connect(lambda: self.main_viewmodel.control_nginx("reload"))
+        self.tray_menu.addAction(reload_action)
+        
+        self.tray_menu.addSeparator()
+        
+        # 退出
+        quit_action = QAction(self.language_manager.get("exit"), self)
+        quit_action.triggered.connect(self._quit_from_tray)
+        self.tray_menu.addAction(quit_action)
+        
+        self.tray_icon.setContextMenu(self.tray_menu)
+        
+        # 双击托盘图标显示主窗口
+        self.tray_icon.activated.connect(self._on_tray_icon_activated)
+        
+        # 显示托盘图标
+        self.tray_icon.show()
+        
+        logger.info("System tray icon created")
+    
+    def _create_tray_icon_pixmap(self):
+        """创建托盘图标 - 直接创建而不是从tray_icon获取."""
+        return self._create_default_tray_icon()
+    
+    def _create_default_tray_icon(self):
+        """创建默认托盘图标."""
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.transparent)
+        
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 绘制绿色背景圆形
+        painter.setBrush(QColor("#28a745"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(1, 1, 14, 14)
+        
+        # 绘制白色"N"字母
+        painter.setPen(QColor("white"))
+        font = QFont("Arial", 9, QFont.Bold)
+        painter.setFont(font)
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, "N")
+        
+        painter.end()
+        
+        return pixmap
+    
+    def _show_hide_main_window(self):
+        """显示/隐藏主窗口."""
+        if self.isVisible():
+            self.hide()
+        else:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+    
+    def _on_tray_icon_activated(self, reason):
+        """托盘图标激活事件."""
+        if reason == QSystemTrayIcon.DoubleClick:
+            self._show_hide_main_window()
+    
+    def _quit_from_tray(self):
+        """从托盘退出."""
+        self.tray_icon.hide()
+        self.close()
+    
     def _on_about(self):
         """About dialog."""
         about_text = self.language_manager.get("about_content")
@@ -332,17 +438,22 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Close event."""
-        reply = QMessageBox.question(
-            self,
-            self.language_manager.get("confirm_exit"),
-            self.language_manager.get("exit_confirm_message"),
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            # 清理资源
-            self.main_viewmodel.cleanup()
-            logger.info("Application closing...")
-            event.accept()
-        else:
+        # 如果托盘图标存在，则最小化到托盘而不是退出
+        if self.tray_icon and self.tray_icon.isVisible():
+            self.hide()
             event.ignore()
+        else:
+            reply = QMessageBox.question(
+                self,
+                self.language_manager.get("confirm_exit"),
+                self.language_manager.get("exit_confirm_message"),
+                QMessageBox.Yes | QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                # 清理资源
+                self.main_viewmodel.cleanup()
+                logger.info("Application closing...")
+                event.accept()
+            else:
+                event.ignore()

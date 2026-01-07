@@ -92,12 +92,52 @@ class StatusBar(QStatusBar):
         """更新状态."""
         self._status = status
         
-        # 更新状态文本
-        status_text = f"Nginx {status.status}"
-        if status.process_info and status.process_info.pid:
-            status_text += f" (PID: {status.process_info.pid})"
+        # 更新状态文本 - 根据进程数量显示不同状态
+        if status.is_running() and status.process_info:
+            # 计算总进程数（master + workers）
+            total_processes = 1 + len(status.process_info.worker_pids)
+            expected_processes = 3  # 默认期望3个进程（1个master + 2个worker）
+            
+            if total_processes >= expected_processes:
+                # 全部进程正常运行
+                status_text = self.language_manager.get(
+                    "nginx_all_processes_normal",
+                    count=total_processes,
+                    total=total_processes
+                )
+            elif total_processes > 0:
+                # 部分进程异常停止
+                status_text = self.language_manager.get(
+                    "nginx_partial_processes_error",
+                    count=total_processes,
+                    total=expected_processes
+                )
+            else:
+                # 没有检测到进程
+                status_text = self.language_manager.get("nginx_not_running")
+        else:
+            # Nginx未运行
+            status_text = self.language_manager.get("nginx_not_started")
         
         self.status_text.setText(status_text)
+        
+        # 更新状态图标 - 根据进程状态设置不同颜色
+        if status.is_running() and status.process_info:
+            total_processes = 1 + len(status.process_info.worker_pids)
+            expected_processes = 3
+            
+            if total_processes >= expected_processes:
+                # 全部进程正常 - 绿色
+                self._status.status = NginxProcessStatus.RUNNING
+            elif total_processes > 0:
+                # 部分进程异常 - 黄色警告
+                self._status.status = NginxProcessStatus.STARTING
+            else:
+                # 没有进程 - 灰色
+                self._status.status = NginxProcessStatus.STOPPED
+        else:
+            # Nginx未运行 - 灰色
+            self._status.status = NginxProcessStatus.STOPPED
         
         # 更新状态图标
         self._update_status_icon()

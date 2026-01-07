@@ -154,5 +154,12 @@
   "memory_usage": "Memory",
   "uptime": "Uptime",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "nginx_all_processes_normal": "All Nginx processes running normally ({count}/{total})",
+  "nginx_partial_processes_error": "Partial Nginx processes error ({count}/{total})",
+  "nginx_not_started": "Nginx not started",
+  "show_main_window": "Show Main Window",
+  "config_error": "Configuration Error",
+  "invalid_config": "Invalid configuration, please check input",
+  "config_error_occurred": "Error occurred while saving configuration"
 }

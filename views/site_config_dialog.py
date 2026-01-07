@@ -205,9 +205,26 @@ class BaseSiteConfigDialog(QDialog):
     
     def _on_save(self):
         """保存配置."""
-        config = self.get_config()
-        if config:
-            self.accept()
+        try:
+            config = self.get_config()
+            if config:
+                self.accept()
+            else:
+                # 配置验证失败，显示错误消息
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self,
+                    self.language_manager.get("config_error"),
+                    self.language_manager.get("invalid_config")
+                )
+        except Exception as e:
+            logger.error(f"Failed to save site config: {e}")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self,
+                self.language_manager.get("config_error"),
+                f"{self.language_manager.get('config_error_occurred')}: {str(e)}"
+            )
     
     def _clear_fields(self):
         """清空表单."""

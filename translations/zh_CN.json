@@ -170,5 +170,16 @@
   "php_site_config": "PHP站点配置",
   "proxy_site_config": "反向代理配置",
   "select_root_dir": "选择网站根目录",
-  "website_settings": "网站设置"
+  "website_settings": "网站设置",
+  "nginx_all_processes_normal": "Nginx全部进程运行正常（{count}/{total}）",
+  "nginx_partial_processes_error": "Nginx部分进程异常（{count}/{total}）",
+  "nginx_not_started": "Nginx尚未启动",
+  "cpu_usage": "CPU",
+  "memory_usage": "内存",
+  "uptime": "运行时间",
+  "show_main_window": "显示主窗口",
+  "nginx_not_running": "Nginx未运行",
+  "config_error": "配置错误",
+  "invalid_config": "配置无效，请检查输入",
+  "config_error_occurred": "配置保存时发生错误"
 }
