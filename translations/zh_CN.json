@@ -1,5 +1,5 @@
 {
-  "app_title": "easyNginx - 专业Nginx管理工具",
+  "app_title": "easyNginx {version}",
   "file_menu": "文件(&F)",
   "takeover_nginx": "接管Nginx目录",
   "new_proxy": "新建反向代理",

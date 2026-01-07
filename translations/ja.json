@@ -1,5 +1,5 @@
 {
-  "app_title": "easyNginx - プロフェッショナルなNginx管理ツール",
+  "app_title": "easyNginx {version}",
   "app_name": "easyNginx",
   "file_menu": "ファイル(&F)",
   "takeover_nginx": "Nginxディレクトリの引き継ぎ",

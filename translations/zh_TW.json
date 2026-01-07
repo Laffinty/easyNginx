@@ -1,5 +1,5 @@
 {
-  "app_title": "easyNginx - 專業Nginx管理工具",
+  "app_title": "easyNginx {version}",
   "app_name": "easyNginx",
   "file_menu": "檔案(&F)",
   "takeover_nginx": "接管Nginx目錄",

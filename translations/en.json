@@ -1,5 +1,5 @@
 {
-  "app_title": "easyNginx - Professional Nginx Management",
+  "app_title": "easyNginx {version}",
   "app_name": "easyNginx",
   "file_menu": "File(&F)",
   "takeover_nginx": "Takeover Nginx Directory",

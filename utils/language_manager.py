@@ -69,7 +69,7 @@ class LanguageManager(QObject):
         
         # Default English translations
         en_trans = {
-            "app_title": "easyNginx - Professional Nginx Management",
+            "app_title": "easyNginx {version}",
             "app_name": "easyNginx",
             "file_menu": "File(&F)",
             "takeover_nginx": "Takeover Nginx Directory",
@@ -187,7 +187,7 @@ class LanguageManager(QObject):
         # Simplified Chinese translations
         zh_CN_trans = {
             k: v for k, v in {
-                "app_title": "easyNginx - 专业Nginx管理工具",
+                "app_title": "easyNginx {version}",
                 "file_menu": "文件(&F)",
                 "takeover_nginx": "接管Nginx目录",
                 "new_proxy": "新建反向代理",

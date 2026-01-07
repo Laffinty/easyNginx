@@ -7,6 +7,9 @@ Main entry point
 import sys
 import os
 from pathlib import Path
+
+# Application version
+APP_VERSION = "v1.0"
 from typing import Optional
 from PySide6.QtWidgets import QApplication, QDialog
 from PySide6.QtCore import Qt, QDir
@@ -275,8 +278,8 @@ def main():
     try:
         # 创建Qt应用
         app = QApplication(sys.argv)
-        app.setApplicationName("easyNginx")
-        app.setApplicationDisplayName("easyNginx")
+        # app.setApplicationName("easyNginx")  # 注释掉避免标题重复
+        # app.setApplicationDisplayName("easyNginx")  # 注释掉避免标题重复
         app.setOrganizationName("easyNginx")
         app.setOrganizationDomain("easynginx.com")
         

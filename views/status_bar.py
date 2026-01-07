@@ -80,30 +80,6 @@ class StatusBar(QStatusBar):
         self.reload_btn.setEnabled(False)
         control_layout.addWidget(self.reload_btn)
         
-        # 更多操作菜单
-        self.more_btn = QToolButton()
-        self.more_btn.setText(self.language_manager.get("more"))
-        self.more_btn.setPopupMode(QToolButton.InstantPopup)
-        
-        menu = QMenu(self.more_btn)
-        
-        self.test_action = menu.addAction(self.language_manager.get("test_config"))
-        self.test_action.triggered.connect(self.main_viewmodel.test_config)
-        
-        self.backup_action = menu.addAction(self.language_manager.get("backup_config"))
-        self.backup_action.triggered.connect(self.main_viewmodel.backup_config)
-        
-        menu.addSeparator()
-        
-        self.open_dir_action = menu.addAction(self.language_manager.get("open_config_dir"))
-        self.open_dir_action.triggered.connect(self.main_viewmodel.nginx_service.open_config_directory)
-        
-        self.open_editor_action = menu.addAction(self.language_manager.get("edit_config_file"))
-        self.open_editor_action.triggered.connect(self.main_viewmodel.nginx_service.open_config_in_editor)
-        
-        self.more_btn.setMenu(menu)
-        control_layout.addWidget(self.more_btn)
-        
         self.addPermanentWidget(control_widget)
     
     def _connect_signals(self):
@@ -117,7 +93,7 @@ class StatusBar(QStatusBar):
         self._status = status
         
         # 更新状态文本
-        status_text = f"Nginx {status.status.value}"
+        status_text = f"Nginx {status.status}"
         if status.process_info and status.process_info.pid:
             status_text += f" (PID: {status.process_info.pid})"
         
@@ -126,27 +102,37 @@ class StatusBar(QStatusBar):
         # 更新状态图标
         self._update_status_icon()
         
-        # 更新信息文本
-        info_parts = []
+        # 更新信息文本 - 站点统计
         if status.total_sites > 0:
-            info_parts.append(f"{self.language_manager.get('sites')}: {status.total_sites}")
+            # 从sites_by_type字典获取各类型站点数量，默认为0
+            static_count = status.sites_by_type.get("static", 0)
+            php_count = status.sites_by_type.get("php", 0)
+            proxy_count = status.sites_by_type.get("proxy", 0)
+            
+            site_stats = self.language_manager.get(
+                "total_sites", 
+                total=status.total_sites,
+                static=static_count,
+                php=php_count,
+                proxy=proxy_count
+            )
+            self.info_text.setText(site_stats)
+        else:
+            self.info_text.setText("")
         
+        # 如果Nginx正在运行，显示资源使用信息
         if status.process_info and status.is_running():
-            info_parts.append(f"{self.language_manager.get('cpu_usage')}: {status.process_info.cpu_percent}%")
-            info_parts.append(f"{self.language_manager.get('memory_usage')}: {status.get_memory_usage_mb():.1f}MB")
-            info_parts.append(f"{self.language_manager.get('uptime')}: {status.get_uptime_display()}")
-        
-        self.info_text.setText(" | ".join(info_parts) if info_parts else "")
+            resource_info = f"{self.language_manager.get('cpu_usage')}: {status.process_info.cpu_percent}% | {self.language_manager.get('memory_usage')}: {status.get_memory_usage_mb():.1f}MB | {self.language_manager.get('uptime')}: {status.get_uptime_display()}"
+            if self.info_text.text():
+                self.info_text.setText(f"{self.info_text.text()} | {resource_info}")
+            else:
+                self.info_text.setText(resource_info)
         
         # 更新按钮状态
         is_running = status.is_running()
         self.start_btn.setEnabled(not is_running)
         self.stop_btn.setEnabled(is_running)
         self.reload_btn.setEnabled(is_running)
-        self.test_action.setEnabled(True)
-        self.backup_action.setEnabled(True)
-        self.open_dir_action.setEnabled(status.can_manage())
-        self.open_editor_action.setEnabled(status.can_manage())
         
         # 停止闪烁
         if is_running and self._blinking:
@@ -200,13 +186,6 @@ class StatusBar(QStatusBar):
         self.start_btn.setText(self.language_manager.get("start"))
         self.stop_btn.setText(self.language_manager.get("stop"))
         self.reload_btn.setText(self.language_manager.get("reload"))
-        self.more_btn.setText(self.language_manager.get("more"))
-        
-        # 更新菜单项文本
-        self.test_action.setText(self.language_manager.get("test_config"))
-        self.backup_action.setText(self.language_manager.get("backup_config"))
-        self.open_dir_action.setText(self.language_manager.get("open_config_dir"))
-        self.open_editor_action.setText(self.language_manager.get("edit_config_file"))
         
         # 更新当前状态显示
         self.update_status(self._status)

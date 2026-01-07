@@ -19,6 +19,9 @@ from utils.theme_manager import ThemeManager
 from utils.language_manager import LanguageManager
 from services.config_generator import ConfigGenerator
 
+# Application version
+APP_VERSION = "v1.0"
+
 
 class MainWindow(QMainWindow):
     """
@@ -50,7 +53,7 @@ class MainWindow(QMainWindow):
     
     def _setup_ui(self):
         """设置UI."""
-        self.setWindowTitle("easyNginx - Professional Nginx Management")
+        self.setWindowTitle(f"easyNginx {APP_VERSION}")
         self.setMinimumSize(800, 600)
         
         # 中央部件
@@ -310,7 +313,7 @@ class MainWindow(QMainWindow):
     def _retranslate_ui(self):
         """Dynamically update all UI text when language changes."""
         # Update window title
-        self.setWindowTitle(self.language_manager.get("app_title"))
+        self.setWindowTitle(f"easyNginx {APP_VERSION}")
         
         # Recreate menu bar with new language
         self.menuBar().clear()

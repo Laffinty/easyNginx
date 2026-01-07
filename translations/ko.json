@@ -1,5 +1,5 @@
 {
-  "app_title": "easyNginx - 전문 Nginx 관리 도구",
+  "app_title": "easyNginx {version}",
   "app_name": "easyNginx",
   "file_menu": "파일(&F)",
   "takeover_nginx": "Nginx 디렉터리 인수",
