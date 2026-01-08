@@ -301,12 +301,16 @@ def main():
             return
         
         # 创建ViewModel
+        logger.info("Creating MainViewModel...")
         main_viewmodel = MainViewModel(nginx_path, config_path)
         
-        # 初始化ViewModel
+        # 初始化ViewModel（包含配置同步）
+        logger.info("Initializing MainViewModel and syncing configuration...")
         if not main_viewmodel.initialize():
             logger.error("Failed to initialize MainViewModel")
             sys.exit(1)
+        
+        logger.info("Configuration sync completed successfully")
         
         # 创建主窗口
         main_window = MainWindow(main_viewmodel)

@@ -1,0 +1,13 @@
+events {
+    worker_connections 2048;
+}
+
+http {
+    include mime.types;
+    
+    server {
+        listen 8080;
+        server_name user.local;
+        root html;
+    }
+}

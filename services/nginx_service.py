@@ -217,9 +217,9 @@ class NginxService:
             return False, "Nginx is not running"
         
         try:
-            # 发送QUIT信号优雅停止
+            # 发送QUIT信号优雅停止（Windows需要-c参数指定配置文件）
             result = subprocess.run(
-                [self._nginx_path, "-s", "quit"],
+                [self._nginx_path, "-s", "quit", "-c", self._config_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -257,9 +257,9 @@ class NginxService:
             if not is_valid:
                 return False, f"Config test failed: {message}"
             
-            # 发送reload信号
+            # 发送reload信号（Windows需要-c参数指定配置文件）
             result = subprocess.run(
-                [self._nginx_path, "-s", "reload"],
+                [self._nginx_path, "-s", "reload", "-c", self._config_path],
                 capture_output=True,
                 text=True,
                 timeout=10

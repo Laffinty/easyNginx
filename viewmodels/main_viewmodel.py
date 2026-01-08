@@ -10,6 +10,7 @@ from models.nginx_status import NginxStatus, SiteListItem
 from services.nginx_service import NginxService
 from services.config_generator import ConfigGenerator
 from services.config_parser import ConfigParser
+from services.config_manager import ConfigManager
 from utils.language_manager import LanguageManager
 
 
@@ -77,6 +78,7 @@ class MainViewModel(QObject):
         self.nginx_service = NginxService(nginx_path, config_path)
         self.config_generator = ConfigGenerator()
         self.config_parser = ConfigParser()
+        self.config_manager = ConfigManager(Path(config_path) if config_path else None)
         self.language_manager = LanguageManager()
         
         # State management
@@ -90,22 +92,49 @@ class MainViewModel(QObject):
         logger.info("MainViewModel initialized")
     
     def initialize(self):
-        """初始化应用."""
+        """初始化应用 - 包括Nginx检查、配置同步和状态监控."""
+        logger.info("=" * 60)
         logger.info("Initializing MainViewModel...")
+        logger.info(f"Nginx path: {self.nginx_service.nginx_path}")
+        logger.info(f"Config path: {self.nginx_service.config_path}")
         
         # 检查Nginx可用性
         if not self.nginx_service.is_nginx_available():
-            self.error_occurred.emit("Nginx is not available. Please check the installation.")
+            error_msg = "Nginx is not available. Please check the installation."
+            logger.error(error_msg)
+            self.error_occurred.emit(error_msg)
             return False
         
-        # 加载现有配置
-        self.load_sites()
+        logger.info("Nginx is available ✓")
         
-        # 启动后台状态监控线程（替代定时器）
-        # 线程会自动进行初始状态更新
+        # 检查配置文件是否存在
+        if not self.nginx_service.config_path or not Path(self.nginx_service.config_path).exists():
+            warning_msg = f"Nginx config file not found at: {self.nginx_service.config_path}. Starting with empty site list."
+            logger.warning(warning_msg)
+            # 不返回False,允许继续运行,只是站点列表为空
+            self.sites = []
+            self.site_list_changed.emit([])
+        else:
+            # 加载现有配置 - 这是同步nginx.conf中站点配置的关键步骤
+            logger.info("Starting configuration sync from nginx.conf...")
+            
+            # 设置配置管理器路径
+            self.config_manager.config_path = Path(self.nginx_service.config_path)
+            
+            # 加载管理的站点
+            self.load_sites()
+            
+            if self.sites:
+                logger.info(f"Configuration sync completed: {len(self.sites)} managed sites loaded")
+            else:
+                logger.info("Configuration sync completed: No managed sites found in nginx.conf")
+        
+        # 启动后台状态监控线程
+        logger.info("Starting status monitoring thread...")
         self._start_status_monitoring()
         
-        logger.info("MainViewModel initialized successfully")
+        logger.info("MainViewModel initialized successfully ✓")
+        logger.info("=" * 60)
         return True
     
     def cleanup(self):
@@ -144,20 +173,50 @@ class MainViewModel(QObject):
         self.nginx_status_changed.emit(status)
     
     def load_sites(self):
-        """加载站点列表."""
+        """加载站点列表 - 只加载标记为管理的server块，保留其他配置."""
+        logger.info("Starting to load managed sites from nginx configuration...")
+        
         try:
-            if self.nginx_service.config_path:
-                config_path = Path(self.nginx_service.config_path)
-                self.sites = self.config_parser.parse_config_file(config_path)
-                
-                # 转换为SiteListItem
-                site_items = self.config_parser.build_site_list(self.sites)
-                self.site_list_changed.emit(site_items)
-                
-                logger.info(f"Loaded {len(self.sites)} sites")
+            if not self.nginx_service.config_path:
+                error_msg = "Nginx config path is not set, cannot load sites"
+                logger.error(error_msg)
+                self.error_occurred.emit(error_msg)
+                return
+            
+            config_path = Path(self.nginx_service.config_path)
+            
+            if not config_path.exists():
+                error_msg = f"Nginx config file not found: {config_path}"
+                logger.warning(error_msg)
+                # 配置文件不存在时，初始化空站点列表
+                self.sites = []
+                self.site_list_changed.emit([])
+                # 不显示错误，因为这是首次运行的情况
+                return
+            
+            logger.info(f"Reading nginx configuration from: {config_path}")
+            
+            # 加载配置文件内容
+            content = config_path.read_text(encoding="utf-8", errors="ignore")
+            
+            # 使用配置管理器解析标记为管理的站点
+            self.sites = self.config_manager.parse_managed_sites(content, self.config_parser)
+            
+            logger.info(f"Loaded {len(self.sites)} managed sites from config")
+            
+            # 转换为SiteListItem用于UI显示
+            site_items = self.config_parser.build_site_list(self.sites)
+            self.site_list_changed.emit(site_items)
+            
+            # 发送操作完成信号
+            self.operation_completed.emit(True, f"从nginx.conf加载 {len(self.sites)} 个受管站点")
+            
         except Exception as e:
-            logger.error(f"Failed to load sites: {e}")
-            self.error_occurred.emit(f"Failed to load sites: {e}")
+            logger.exception(f"Failed to load sites: {e}")
+            self.error_occurred.emit(f"加载站点配置失败: {e}")
+            # 确保即使失败也有空列表
+            self.sites = []
+            self.site_list_changed.emit([])
     
     def add_site(self, site_config: SiteConfigBase) -> bool:
         """
@@ -304,24 +363,21 @@ class MainViewModel(QObject):
     
     def _deploy_config(self) -> bool:
         """
-        部署配置到Nginx
+        部署配置到Nginx - 使用配置管理器进行增量更新
         
         Returns:
             是否成功
         """
         try:
-            # 备份现有配置
-            if self.nginx_service.config_path:
-                backup_path = self.nginx_service.backup_config()
-                if backup_path:
-                    logger.info(f"Config backup created: {backup_path}")
+            # 使用配置管理器更新配置（只更新server块，保留其他用户配置）
+            success = self.config_manager.update_config(
+                sites=self.sites,
+                config_generator=self.config_generator
+            )
             
-            # 生成完整配置
-            config_content = self._build_full_config()
-            
-            # 写入配置文件
-            config_path = Path(self.nginx_service.config_path)
-            config_path.write_text(config_content, encoding="utf-8")
+            if not success:
+                self.error_occurred.emit("Failed to update configuration")
+                return False
             
             # 测试配置
             is_valid, message = self.nginx_service.test_config()
@@ -336,82 +392,21 @@ class MainViewModel(QObject):
                     self.error_occurred.emit(f"Nginx reload failed: {msg}")
                     return False
             
+            logger.info(f"Successfully deployed {len(self.sites)} sites")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to deploy config: {e}")
+            logger.exception(f"Failed to deploy config: {e}")
             self.error_occurred.emit(f"Config deployment failed: {e}")
             return False
     
-    def _build_full_config(self) -> str:
-        """构建完整的Nginx配置."""
-        config_parts = []
-        
-        # 添加Nginx全局配置
-        config_parts.append(self._get_nginx_global_config())
-        
-        # 添加events配置
-        config_parts.append(self._get_events_config())
-        
-        # 添加http块开始
-        config_parts.append("http {")
-        config_parts.append("    include       mime.types;")
-        config_parts.append("    default_type  application/octet-stream;")
-        config_parts.append("")
-        
-        # 添加请求限制区域定义（在所有server块之前）
-        # 使用集合跟踪已添加的区域，避免重复
-        added_zones = set()
-        for site in self.sites:
-            site_name = site.site_name.replace(" ", "_")
-            if site_name not in added_zones:
-                config_parts.append(f"    limit_req_zone $binary_remote_addr zone={site_name}_req:10m rate=10r/s;")
-                config_parts.append(f"    limit_conn_zone $binary_remote_addr zone={site_name}_conn:10m;")
-                added_zones.add(site_name)
-        config_parts.append("")
-        
-        # 添加生成的server配置
-        for site in self.sites:
-            site_config = self.config_generator.generate_config(site)
-            # 缩进调整
-            indented_config = "    " + site_config.replace("\n", "\n    ").rstrip()
-            config_parts.append(indented_config)
-            config_parts.append("")
-        
-        # 添加http块结束
-        config_parts.append("}")
-        
-        return "\n".join(config_parts)
-    
-    def _get_nginx_global_config(self) -> str:
-        """获取Nginx全局配置."""
-        return f"""# Nginx Global Configuration
-# Generated by easyNginx v1.0
-
-# Worker进程数（自动）
-worker_processes auto;
-
-# 文件描述符限制
-worker_rlimit_nofile 8192;
-
-# 错误日志
-error_log logs/error.log warn;
+    def _get_config_summary(self) -> str:
+        """获取配置摘要信息."""
+        return f"""# Nginx Configuration
+# Managed by easyNginx
+# Total sites: {len(self.sites)}
+# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
-    
-    def _get_events_config(self) -> str:
-        """获取events配置."""
-        # 根据操作系统选择事件模型
-        event_model = "select" if platform.system() == "Windows" else "epoll"
-        return f"""events {{
-    # 每个worker的连接数
-    worker_connections 1024;
-    
-    # 多连接接受
-    multi_accept on;
-    
-    # 使用select（Windows）或epoll（Linux）
-    use {event_model};
-}}"""
     
     def control_nginx(self, action: str) -> bool:
         """

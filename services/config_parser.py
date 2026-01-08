@@ -31,7 +31,7 @@ class ConfigParser:
     
     def parse_config_file(self, config_path: Path) -> List[SiteConfigBase]:
         """
-        解析nginx.conf文件
+        解析nginx.conf文件，支持include指令和各种格式
         
         Args:
             config_path: 配置文件路径
@@ -44,14 +44,21 @@ class ConfigParser:
             return []
         
         try:
-            content = config_path.read_text(encoding="utf-8")
+            # 检测文件编码
+            try:
+                content = config_path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                logger.warning(f"UTF-8 decode failed, trying GBK for {config_path}")
+                content = config_path.read_text(encoding="gbk")
+            
+            logger.debug(f"Parsing config file: {config_path} (size: {len(content)} bytes)")
             sites = self.parse_config_content(content)
             
-            logger.info(f"Parsed {len(sites)} sites from {config_path}")
+            logger.info(f"✓ Parsed {len(sites)} sites from {config_path.name}")
             return sites
             
         except Exception as e:
-            logger.error(f"Failed to parse config file: {e}")
+            logger.exception(f"Failed to parse config file {config_path}: {e}")
             return []
     
     def parse_config_content(self, content: str) -> List[SiteConfigBase]:
@@ -82,7 +89,7 @@ class ConfigParser:
     
     def _parse_server_block(self, server_block: str) -> Optional[SiteConfigBase]:
         """
-        解析单个server块
+        解析单个server块，增强健壮性和错误处理
         
         Args:
             server_block: server块内容
@@ -90,48 +97,65 @@ class ConfigParser:
         Returns:
             站点配置对象或None
         """
-        # 提取所有指令
-        directives = {}
-        for match in self.directive_pattern.finditer(server_block):
-            key = match.group(1)
-            value = match.group(2).strip()
-            directives[key] = value
-        
-        # 提取location块
-        locations = []
-        for match in self.location_pattern.finditer(server_block):
-            location_path = match.group(1)
-            location_body = match.group(2)
-            locations.append({"path": location_path, "body": location_body})
-        
-        # 检测站点类型
-        site_type = self._detect_site_type(directives, locations)
-        
-        # 构建基础配置
-        base_config = {
-            "site_name": self._generate_site_name(directives),
-            "listen_port": self._parse_listen_port(directives.get("listen", "80")),
-            "server_name": self._parse_server_name(directives.get("server_name", "localhost")),
-            "enable_https": "ssl" in directives.get("listen", ""),
-            "ssl_cert_path": directives.get("ssl_certificate"),
-            "ssl_key_path": directives.get("ssl_certificate_key")
-        }
-        
-        # 根据类型创建特定配置
-        if site_type == "static":
-            config = self._build_static_config(base_config, directives)
-        elif site_type == "php":
-            config = self._build_php_config(base_config, directives, locations)
-        elif site_type == "proxy":
-            config = self._build_proxy_config(base_config, directives, locations)
-        else:
-            logger.warning(f"Unknown site type: {site_type}")
+        try:
+            logger.debug("Parsing server block...")
+            
+            # 提取所有指令
+            directives = {}
+            for match in self.directive_pattern.finditer(server_block):
+                key = match.group(1)
+                value = match.group(2).strip()
+                directives[key] = value
+            
+            logger.debug(f"Extracted {len(directives)} directives")
+            
+            # 提取location块
+            locations = []
+            for match in self.location_pattern.finditer(server_block):
+                location_path = match.group(1)
+                location_body = match.group(2)
+                locations.append({"path": location_path, "body": location_body})
+            
+            logger.debug(f"Extracted {len(locations)} location blocks")
+            
+            # 检测站点类型
+            site_type = self._detect_site_type(directives, locations)
+            logger.debug(f"Detected site type: {site_type}")
+            
+            # 构建基础配置
+            base_config = {
+                "site_name": self._generate_site_name(directives),
+                "listen_port": self._parse_listen_port(directives.get("listen", "80")),
+                "server_name": self._parse_server_name(directives.get("server_name", "localhost")),
+                "enable_https": "ssl" in directives.get("listen", ""),
+                "ssl_cert_path": directives.get("ssl_certificate"),
+                "ssl_key_path": directives.get("ssl_certificate_key")
+            }
+            
+            logger.debug(f"Base config: {base_config}")
+            
+            # 根据类型创建特定配置
+            if site_type == "static":
+                config = self._build_static_config(base_config, directives)
+            elif site_type == "php":
+                config = self._build_php_config(base_config, directives, locations)
+            elif site_type == "proxy":
+                config = self._build_proxy_config(base_config, directives, locations)
+            else:
+                logger.warning(f"Unknown site type: {site_type}")
+                return None
+            
+            if config:
+                site_config = SITE_CONFIG_TYPES[site_type](**config)
+                logger.info(f"✓ Successfully parsed site: {config['site_name']} (type: {site_type})")
+                return site_config
+            else:
+                logger.warning("Failed to build site configuration")
+                return None
+                
+        except Exception as e:
+            logger.exception(f"Error parsing server block: {e}")
             return None
-        
-        if config:
-            return SITE_CONFIG_TYPES[site_type](**config)
-        
-        return None
     
     def _detect_site_type(self, directives: Dict[str, str], locations: List[Dict[str, str]]) -> str:
         """
