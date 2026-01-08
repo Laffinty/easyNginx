@@ -63,8 +63,8 @@ server {
     {% endif %}
     
     # 请求限制（防DDoS/爆破）
-    limit_req zone={{ site_name }}_req burst=20 nodelay;
-    limit_conn {{ site_name }}_conn 20;
+    limit_req zone=api burst=20 nodelay;
+    limit_conn addr 20;
     
     # 缓冲区限制（防缓冲区溢出）
     client_body_buffer_size {{ common_security.client_body_buffer_size }};

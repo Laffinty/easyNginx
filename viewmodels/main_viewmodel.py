@@ -174,8 +174,8 @@ class MainViewModel(QObject):
         self.nginx_status_changed.emit(status)
     
     def load_sites(self):
-        """加载站点列表 - 只加载标记为管理的server块，保留其他配置."""
-        logger.info("Starting to load managed sites from nginx configuration...")
+        """加载站点列表 - 加载所有server块（包括管理的和非管理的）."""
+        logger.info("Starting to load all sites from nginx configuration...")
         
         try:
             if not self.nginx_service.config_path:
@@ -205,17 +205,40 @@ class MainViewModel(QObject):
                 self.site_list_changed.emit([])
                 return
             
-            # 使用配置管理器解析标记为管理的站点
-            self.sites = self.config_manager.parse_managed_sites(content, self.config_parser)
+            all_site_items = []
             
-            logger.info(f"Loaded {len(self.sites)} managed sites from config")
+            # 1. 加载管理的站点（带easyNginx标记）
+            managed_sites = self.config_manager.parse_managed_sites(content, self.config_parser)
+            logger.info(f"Loaded {len(managed_sites)} managed sites from config")
             
-            # 转换为SiteListItem用于UI显示
-            site_items = self.config_parser.build_site_list(self.sites)
-            self.site_list_changed.emit(site_items)
+            # 将管理的站点添加到sites列表
+            self.sites = managed_sites.copy()
+            
+            # 构建管理的站点列表项
+            managed_items = self.config_parser.build_site_list(managed_sites, is_managed=True)
+            all_site_items.extend(managed_items)
+            
+            # 2. 加载非管理的站点（包括默认server）
+            # 使用config_parser解析所有server块
+            all_sites = self.config_parser.parse_config_content(content)
+            
+            # 过滤掉已经包含在managed_sites中的站点
+            managed_names = [s.site_name for s in managed_sites]
+            unmanaged_sites = [site for site in all_sites if site.site_name not in managed_names]
+            
+            logger.info(f"Loaded {len(unmanaged_sites)} unmanaged sites from config")
+            
+            # 构建非管理的站点列表项
+            unmanaged_items = self.config_parser.build_site_list(unmanaged_sites, is_managed=False)
+            all_site_items.extend(unmanaged_items)
+            
+            logger.info(f"Total sites loaded: {len(all_site_items)} (managed: {len(managed_items)}, unmanaged: {len(unmanaged_items)})")
+            
+            # 发送所有站点到UI显示
+            self.site_list_changed.emit(all_site_items)
             
             # 发送操作完成信号
-            self.operation_completed.emit(True, f"从nginx.conf加载 {len(self.sites)} 个受管站点")
+            self.operation_completed.emit(True, f"从nginx.conf加载 {len(all_site_items)} 个站点（{len(managed_items)}个受管）")
             
         except Exception as e:
             logger.exception(f"Failed to load sites: {e}")

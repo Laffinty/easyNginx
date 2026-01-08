@@ -136,6 +136,7 @@ class SiteListItem(BaseModel):
     status: str = Field(default="configured", description="状态")
     config_file_path: Optional[str] = Field(default=None, description="配置文件路径")
     last_modified: Optional[datetime] = Field(default=None, description="最后修改时间")
+    is_managed: bool = Field(default=True, description="是否由easyNginx管理")
     
     def get_display_name(self) -> str:
         """获取显示名称."""

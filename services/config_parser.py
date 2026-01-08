@@ -311,8 +311,13 @@ class ConfigParser:
             return match.group(1).strip()
         return None
     
-    def build_site_list(self, sites: List[SiteConfigBase]) -> List[SiteListItem]:
-        """构建站点列表项."""
+    def build_site_list(self, sites: List[SiteConfigBase], is_managed: bool = True) -> List[SiteListItem]:
+        """构建站点列表项.
+        
+        Args:
+            sites: 站点配置列表
+            is_managed: 是否由easyNginx管理
+        """
         items = []
         
         for site in sites:
@@ -323,7 +328,8 @@ class ConfigParser:
                 listen_port=site.listen_port,
                 server_name=site.server_name,
                 enable_https=site.enable_https,
-                status="configured"
+                status="configured",
+                is_managed=is_managed
             )
             items.append(item)
         

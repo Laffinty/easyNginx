@@ -64,13 +64,13 @@ class ConfigManager:
     
     def extract_managed_sites(self, content: str) -> str:
         """
-        提取由我们管理的配置部分，保留其他配置
+        提取由我们管理的配置部分，保留其他配置（包括默认server占位块）
         
         Args:
             content: 完整配置内容
             
         Returns:
-            去除管理server块后的配置内容
+            去除管理server块后的配置内容（保留默认server占位块）
         """
         # 查找所有被标记的管理server块
         managed_pattern = re.compile(
@@ -81,7 +81,10 @@ class ConfigManager:
         # 移除所有管理的server块
         cleansed_content = managed_pattern.sub("", content)
         
-        logger.info("Removed managed server blocks from config")
+        # 移除可能产生的多余空行
+        cleansed_content = re.sub(r'\n\s*\n\s*\n', '\n\n', cleansed_content)
+        
+        logger.info("Removed managed server blocks from config, kept default server placeholder")
         
         return cleansed_content
     
@@ -109,10 +112,49 @@ class ConfigManager:
         
         return "\n".join(marked_config)
     
+    def ensure_default_server(self, content: str) -> str:
+        """
+        确保配置中包含默认的server占位块
+        
+        Args:
+            content: 配置文件内容
+            
+        Returns:
+            包含默认server占位块的配置内容
+        """
+        # 检查是否已包含默认server占位块
+        # 搜索listen指令中包含default_server的server块
+        default_server_pattern = re.compile(
+            r'server\s*{[^}]*listen[^;]*default_server[^;]*;[^}]*server_name\s+_;[^}]*}',
+            re.MULTILINE | re.DOTALL
+        )
+        
+        if default_server_pattern.search(content):
+            logger.info("Default server placeholder already exists")
+            return content
+        
+        # 查找http块
+        http_pattern = re.compile(r'(http\s*{[^}]*?)(?=\n\s*server\s*{|\n\s*#.*Default Server|$)', re.MULTILINE | re.DOTALL)
+        http_match = http_pattern.search(content)
+        
+        default_server_block = '''\n    # Default Server (Placeholder - can be replaced by actual sites)\n    server {\n        listen 80 default_server;\n        server_name _;\n        \n        location / {\n            root html;\n            index index.html index.htm;\n        }\n        \n        error_page 500 502 503 504 /50x.html;\n        location = /50x.html {\n            root html;\n        }\n    }\n'''
+        
+        if http_match:
+            # 在http块内插入默认server块
+            insert_pos = http_match.end()
+            content = content[:insert_pos] + default_server_block + content[insert_pos:]
+            logger.info("Added default server placeholder to http block")
+        else:
+            # 如果没有找到合适的插入位置，在文件末尾添加
+            content += '\nhttp {\n    include mime.types;\n    default_type application/octet-stream;' + default_server_block + '}\n'
+            logger.info("Added http block with default server placeholder")
+        
+        return content
+    
     def update_config(self, sites: List[SiteConfigBase], config_path: Optional[Path] = None, 
                      config_generator=None) -> bool:
         """
-        更新配置文件 - 增量更新，保留其他配置
+        更新配置文件 - 增量更新，保留其他配置（包括默认server占位块）
         
         Args:
             sites: 站点配置列表
@@ -159,7 +201,10 @@ class ConfigManager:
                 # 在http块内插入管理的server块
                 new_config = self._insert_managed_blocks(cleansed_content, managed_blocks)
             
-            # 6. 创建备份
+            # 6. 确保包含默认server占位块
+            new_config = self.ensure_default_server(new_config)
+            
+            # 7. 创建备份
             backup_path = self.backup_config(config_path)
             if backup_path:
                 logger.info(f"Backup created: {backup_path}")
@@ -180,88 +225,89 @@ class ConfigManager:
         """
         在http块内插入管理的server块
         
+        策略：找到http块的正确结束位置，并在http块结束前插入server块
+        
         Args:
-            content: 清洗后的配置内容
+            content: 清洗后的配置内容（已移除管理的server块）
             managed_blocks: 管理的server块列表
             
         Returns:
             完整的配置内容
         """
-        # 查找http块的最后一个}之前
-        # 策略：在http块内的最后位置插入server块
-        
         lines = content.splitlines()
         http_block_start = -1
         http_block_end = -1
         
-        # 查找http块的开始和结束
+        # 查找http块的开始
+        for i, line in enumerate(lines):
+            if line.strip().startswith("http {"):
+                http_block_start = i
+                break
+        
+        if http_block_start == -1:
+            # 没有找到http块，创建新的
+            logger.warning("No http block found, creating one")
+            return self._create_config_with_http_block(content, managed_blocks)
+        
+        # 从http块开始，找到对应的结束位置
         depth = 0
         in_http = False
+        brace_count = 0
         
-        for i, line in enumerate(lines):
+        for i in range(len(lines)):
+            line = lines[i]
             stripped = line.strip()
             
-            if stripped.startswith("http {"):
+            # Skip comments and empty lines for brace counting
+            if not stripped or stripped.startswith("#"):
+                continue
+                
+            if i == http_block_start:
                 in_http = True
-                http_block_start = i
-                depth = 1
+                # Count braces in the http line
+                brace_count += line.count("{")
                 continue
             
             if in_http:
-                if "{" in stripped and not stripped.startswith("#"):
-                    depth += stripped.count("{")
-                if "}" in stripped and not stripped.startswith("#"):
-                    depth -= stripped.count("}")
+                # Count opening braces
+                brace_count += line.count("{")
+                # Count closing braces
+                brace_count -= line.count("}")
                 
-                if depth == 0:
+                # If brace count returns to 0, we found the end of http block
+                if brace_count == 0 and i > http_block_start:
                     http_block_end = i
                     break
         
-        # 如果找到http块，在最后插入server块
+        # 如果找到http块的结束位置，在该位置之前插入server块
         if http_block_start >= 0 and http_block_end > http_block_start:
-            # 在http块结束前插入server块
+            logger.info(f"Found http block: start={http_block_start}, end={http_block_end}")
+            
+            # 构建新的配置内容
             new_lines = []
+            # 添加http块开始到结束前的所有内容
             new_lines.extend(lines[:http_block_end])
             
-            # 添加空行
-            new_lines.append("")
+            # 添加空行分隔
+            if new_lines and new_lines[-1].strip():
+                new_lines.append("")
             
             # 添加管理的server块
             for block in managed_blocks:
                 block_lines = block.splitlines()
                 for line in block_lines:
-                    # 保持原有缩进
                     new_lines.append(line)
             
-            # 添加http块结束
+            # 添加http块结束以及剩余内容
             new_lines.extend(lines[http_block_end:])
             
-            return "\n".join(new_lines)
+            result = "\n".join(new_lines)
+            logger.info("Successfully inserted managed server blocks into http block")
+            return result
         else:
-            # 如果没有找到http块，创建默认的
-            logger.warning("Could not find proper http block location")
-            
-            # 在文件末尾添加http块
-            new_content = content
-            if not new_content.endswith("\n"):
-                new_content += "\n"
-            
-            new_content += "\nhttp {\n"
-            new_content += "    include mime.types;\n"
-            new_content += "    default_type application/octet-stream;\n"
-            new_content += "\n"
-            
-            # 添加管理的server块
-            for block in managed_blocks:
-                block_lines = block.splitlines()
-                for line in block_lines:
-                    if line.strip():
-                        new_content += f"    {line}\n"
-                    else:
-                        new_content += "\n"
-            
-            new_content += "}\n"
-            return new_content
+            # 没有找到正确的http块结束位置
+            logger.warning("Could not find proper http block end, creating new http block")
+            return self._create_config_with_http_block(content, managed_blocks)
     
     def _create_config_with_http_block(self, content: str, managed_blocks: List[str]) -> str:
         """

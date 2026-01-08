@@ -20,8 +20,9 @@ class SiteListWidget(QWidget):
     """
     
     # 信号定义
-    site_selected = Signal(str)
-    site_double_clicked = Signal(str)
+    site_selected = Signal(str)  # 仅传递站点名称
+    site_double_clicked = Signal(str)  # 仅传递站点名称
+    site_selected_with_item = Signal(SiteListItem)  # 传递完整的站点项目
     add_static_site = Signal()
     add_php_site = Signal()
     add_proxy_site = Signal()
@@ -143,9 +144,14 @@ class SiteListWidget(QWidget):
         for item in self.site_items:
             row = []
             
-            # Site name (with HTTPS icon)
+            # Site name (with HTTPS icon and management status)
             name_item = QStandardItem()
             display_name = item.get_display_name()
+            # 添加管理状态标记
+            if item.is_managed:
+                display_name = f"📌 {display_name}"  # 管理的站点用图钉标记
+            else:
+                display_name = f"⚠️ {display_name}"  # 非管理的站点用警告标记
             name_item.setText(display_name)
             name_item.setData(item.site_name, Qt.UserRole)  # Store original name
             row.append(name_item)
@@ -190,14 +196,42 @@ class SiteListWidget(QWidget):
         """双击."""
         if index.isValid():
             site_name = self.model.item(index.row(), 0).data(Qt.UserRole)
-            self.site_selected.emit(site_name)
+            # 查找完整的SiteListItem
+            site_item = next((item for item in self.site_items if item.site_name == site_name), None)
+            if site_item:
+                self.site_selected_with_item.emit(site_item)
+            else:
+                self.site_selected.emit(site_name)
     
     def _edit_site(self, site_name: str):
         """编辑站点."""
         self.site_selected.emit(site_name)
     
-    def _confirm_delete(self, site_name: str):
+    def _confirm_delete(self, site_item: SiteListItem):
         """Confirm delete."""
+        # 检查是否是管理的站点
+        if not site_item.is_managed:
+            QMessageBox.information(
+                self,
+                "非管理站点",
+                f"站点 '{site_item.site_name}' 不是由easyNginx管理的，不能直接删除。\n\n"
+                "您可以在nginx.conf中手动删除此站点的server块，\n"
+                "或者使用'转换为管理站点'功能后再删除。"
+            )
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            self.main_viewmodel.language_manager.get("confirm_delete"),
+            self.main_viewmodel.language_manager.get("delete_confirm_message", name=site_item.site_name),
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.delete_site.emit(site_item)
+    
+    def _confirm_delete_site_name(self, site_name: str):
+        """Confirm delete by site name only (fallback)."""
         reply = QMessageBox.question(
             self,
             self.main_viewmodel.language_manager.get("confirm_delete"),
@@ -206,4 +240,15 @@ class SiteListWidget(QWidget):
         )
         
         if reply == QMessageBox.Yes:
-            self.delete_site.emit(site_name)
+            # 创建临时SiteListItem
+            from models.nginx_status import SiteListItem
+            temp_item = SiteListItem(
+                id=f"{site_name}_0",
+                site_name=site_name,
+                site_type="unknown",
+                listen_port=0,
+                server_name=site_name,
+                enable_https=False,
+                is_managed=True  # 假设是管理的
+            )
+            self.delete_site.emit(temp_item)
