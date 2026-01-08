@@ -12,6 +12,7 @@ from services.config_generator import ConfigGenerator
 from services.config_parser import ConfigParser
 from services.config_manager import ConfigManager
 from utils.language_manager import LanguageManager
+from utils.encoding_utils import read_file_robust
 
 
 class StatusUpdateThread(QThread):
@@ -196,8 +197,13 @@ class MainViewModel(QObject):
             
             logger.info(f"Reading nginx configuration from: {config_path}")
             
-            # 加载配置文件内容
-            content = config_path.read_text(encoding="utf-8", errors="ignore")
+            # 加载配置文件内容（使用健壮的编码检测）
+            content = read_file_robust(config_path)
+            if content is None:
+                logger.error(f"无法读取配置文件: {config_path}")
+                self.sites = []
+                self.site_list_changed.emit([])
+                return
             
             # 使用配置管理器解析标记为管理的站点
             self.sites = self.config_manager.parse_managed_sites(content, self.config_parser)

@@ -9,6 +9,7 @@ from models.site_config import (
     SITE_CONFIG_TYPES
 )
 from models.nginx_status import SiteListItem
+from utils.encoding_utils import read_file_robust
 
 
 class ConfigParser:
@@ -44,12 +45,11 @@ class ConfigParser:
             return []
         
         try:
-            # 检测文件编码
-            try:
-                content = config_path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                logger.warning(f"UTF-8 decode failed, trying GBK for {config_path}")
-                content = config_path.read_text(encoding="gbk")
+            # 使用健壮的编码检测读取文件
+            content = read_file_robust(config_path)
+            if content is None:
+                logger.error(f"无法读取配置文件: {config_path}")
+                return []
             
             logger.debug(f"Parsing config file: {config_path} (size: {len(content)} bytes)")
             sites = self.parse_config_content(content)
@@ -372,7 +372,11 @@ class ConfigParser:
         include_files = []
         
         try:
-            content = config_path.read_text(encoding="utf-8")
+            # 使用健壮的编码检测读取文件
+            content = read_file_robust(config_path)
+            if content is None:
+                logger.error(f"无法读取配置文件: {config_path}")
+                return []
             
             # 匹配include指令
             pattern = re.compile(r'include\s+([^;]+);', re.IGNORECASE)

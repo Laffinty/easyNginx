@@ -8,6 +8,7 @@ from typing import Optional, Tuple, List
 from datetime import datetime
 from loguru import logger
 from models.nginx_status import NginxStatus, NginxProcessStatus, ConfigTestStatus, NginxProcessInfo
+from utils.encoding_utils import read_file_robust
 
 
 class NginxService:
@@ -26,6 +27,10 @@ class NginxService:
         self._nginx_path = nginx_path
         self._config_path = config_path
         self._process: Optional[psutil.Process] = None
+        
+        # 新增：配置文件测试缓存，避免频繁测试
+        self._last_config_mtime = None  # 记录上次配置文件修改时间
+        self._last_test_result = (True, "")  # 缓存上次测试结果（is_valid, message）
         
         # 自动检测Nginx路径
         if not self._nginx_path:
@@ -379,7 +384,7 @@ class NginxService:
             return None
     
     def get_status(self) -> NginxStatus:
-        """获取Nginx完整状态."""
+        """获取Nginx完整状态（优化版：减少不必要的配置测试）."""
         status = NginxStatus(
             nginx_path=self._nginx_path,
             config_path=self._config_path
@@ -387,9 +392,25 @@ class NginxService:
         
         # 检查配置文件状态
         if self._config_path and Path(self._config_path).exists():
-            status.config_last_modified = datetime.fromtimestamp(
-                Path(self._config_path).stat().st_mtime
+            current_mtime = Path(self._config_path).stat().st_mtime
+            status.config_last_modified = datetime.fromtimestamp(current_mtime)
+            
+            # 仅当配置文件变更时才重新测试，否则使用缓存结果
+            if (self._last_config_mtime is None or 
+                self._last_config_mtime != current_mtime):
+                # 配置文件有变更，执行完整测试
+                is_valid, message = self.test_config()
+                self._last_test_result = (is_valid, message)
+                self._last_config_mtime = current_mtime
+            else:
+                # 配置文件未变更，使用缓存测试结果并降级日志
+                is_valid, message = self._last_test_result
+                logger.debug(f"Config unchanged, using cached test result: valid={is_valid}")
+            
+            status.config_test_status = (
+                ConfigTestStatus.SUCCESS if is_valid else ConfigTestStatus.FAILED
             )
+            status.config_test_message = message
         
         # 设置进程状态
         if self.is_nginx_running():
@@ -397,14 +418,6 @@ class NginxService:
             status.process_info = self.get_process_info()
         else:
             status.status = NginxProcessStatus.STOPPED
-        
-        # 测试配置
-        if self._config_path and Path(self._config_path).exists():
-            is_valid, message = self.test_config()
-            status.config_test_status = (
-                ConfigTestStatus.SUCCESS if is_valid else ConfigTestStatus.FAILED
-            )
-            status.config_test_message = message
         
         return status
     
@@ -437,8 +450,11 @@ class NginxService:
             backup_name = f"{config_file.stem}_{timestamp}.conf.bak"
             backup_path = backup_dir / backup_name
             
-            # 读取并写入备份
-            content = config_file.read_text(encoding="utf-8")
+            # 读取并写入备份（使用健壮的编码检测）
+            content = read_file_robust(config_file)
+            if content is None:
+                logger.error(f"无法读取配置文件进行备份: {config_file}")
+                return None
             backup_path.write_text(content, encoding="utf-8")
             
             logger.info(f"Config backup created: {backup_path}")

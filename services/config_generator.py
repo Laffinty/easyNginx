@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from jinja2 import Environment, FileSystemLoader, Template
 from loguru import logger
 from models.site_config import SiteConfigBase, StaticSiteConfig, PHPSiteConfig, ProxySiteConfig
+from utils.encoding_utils import read_file_robust
 import sys
 import os
 
@@ -624,8 +625,11 @@ server {
         backup_name = f"{config_path.stem}_{timestamp}.conf.bak"
         backup_path = backup_dir / backup_name
         
-        # 复制文件
-        content = config_path.read_text(encoding="utf-8")
+        # 复制文件（使用健壮的编码检测）
+        content = read_file_robust(config_path)
+        if content is None:
+            logger.error(f"无法读取配置文件进行备份: {config_path}")
+            return None
         backup_path.write_text(content, encoding="utf-8")
         
         logger.info(f"Backup created: {backup_path}")

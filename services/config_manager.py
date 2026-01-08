@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from loguru import logger
 from models.site_config import SiteConfigBase
+from utils.encoding_utils import read_file_robust
 
 
 class ConfigManager:
@@ -52,13 +53,11 @@ class ConfigManager:
             logger.warning(f"Config file not found: {config_path}, creating default")
             return self._create_default_config()
         
-        try:
-            # 尝试UTF-8编码
-            content = config_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            # 如果失败，尝试GBK编码
-            logger.warning(f"UTF-8 decode failed, trying GBK for {config_path}")
-            content = config_path.read_text(encoding="gbk")
+        # 使用健壮的编码检测读取文件
+        content = read_file_robust(config_path)
+        if content is None:
+            logger.error(f"无法读取配置文件: {config_path}")
+            return self._create_default_config()
         
         logger.info(f"Loaded config file: {config_path} ({len(content)} bytes)")
         return content
@@ -351,7 +350,10 @@ class ConfigManager:
             backup_name = f"{config_path.stem}_{timestamp}.conf.bak"
             backup_path = backup_dir / backup_name
             
-            content = config_path.read_text(encoding="utf-8")
+            content = read_file_robust(config_path)
+            if content is None:
+                logger.error(f"无法读取配置文件进行备份: {config_path}")
+                return None
             backup_path.write_text(content, encoding="utf-8")
             
             logger.info(f"Config backup created: {backup_path}")
