@@ -1,11 +1,12 @@
 """
 Nginx Configuration Manager - 配置管理器
 
-核心职责：
-1. 只管理server块，保留用户的其他配置
-2. 给管理的server块添加标记，便于识别和删除
-3. 增量更新配置，而不是全量覆盖
+核心职责（变更后）：
+1. 所有site块均可管理，无需区分
+2. 直接重写所有server块，不再使用标记
+3. 保留用户的其他非server配置（events, http设置等）
 4. 支持include文件的读取和写入
+5. 使用随机数命名的站点配置目录（如: J43R8_conf.d/）
 """
 
 import re
@@ -17,16 +18,12 @@ from utils.encoding_utils import read_file_robust
 
 
 class ConfigManager:
-    """配置管理器 - 只管理server块，保留用户配置"""
+    """配置管理器 - 所有server块都可管理，无需标记"""
     
-    # 标记用于识别我们管理的server块
-    MANAGED_MARKER = "# easyNginx-managed-site"
-    MANAGED_START = "# easyNginx-MANAGED-START"
-    MANAGED_END = "# easyNginx-MANAGED-END"
-    
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Optional[Path] = None, config_registry=None):
         """初始化配置管理器."""
         self.config_path = config_path
+        self.config_registry = config_registry
         self.server_block_pattern = re.compile(
             r'(server\s*{[^}]*(?:{[^}]*}[^}]*)*})',
             re.MULTILINE | re.DOTALL
@@ -62,43 +59,89 @@ class ConfigManager:
         logger.info(f"Loaded config file: {config_path} ({len(content)} bytes)")
         return content
     
-    def extract_managed_sites(self, content: str) -> str:
+    def _remove_all_server_blocks(self, content: str) -> str:
         """
-        提取由我们管理的配置部分，保留其他配置（包括默认server占位块）
+        移除所有server块，保留其他配置
         
         Args:
-            content: 完整配置内容
+            content: 配置内容
             
         Returns:
-            去除管理server块后的配置内容（保留默认server占位块）
+            移除server块后的内容
         """
-        # 查找所有被标记的管理server块
-        managed_pattern = re.compile(
-            rf"{re.escape(self.MANAGED_START)}.*?{re.escape(self.MANAGED_END)}\n",
-            re.MULTILINE | re.DOTALL
-        )
+        # 使用更精确的模式匹配server块
+        # 匹配 server { ... } 结构，使用栈来正确处理嵌套
         
-        # 移除所有管理的server块
-        cleansed_content = managed_pattern.sub("", content)
+        result = []
+        i = 0
+        depth = 0
+        in_server = False
+        server_start = -1
+        
+        while i < len(content):
+            # 查找server关键字
+            if content[i:].startswith("server") and (i + 6 >= len(content) or content[i+6] in " {\t\n"):
+                # 确认是server块开始
+                next_pos = i + 6
+                while next_pos < len(content) and content[next_pos] in " \t":
+                    next_pos += 1
+                
+                if next_pos < len(content) and content[next_pos] == "{":
+                    # 找到server块开始
+                    if depth == 0:
+                        in_server = True
+                        server_start = i
+                    depth += 1
+                    i = next_pos + 1
+                    continue
+            
+            # 处理大括号计数
+            if content[i] == "{" and not in_server:
+                depth += 1
+            elif content[i] == "}" and not in_server:
+                depth -= 1
+            elif content[i] == "{" and in_server:
+                depth += 1
+            elif content[i] == "}" and in_server:
+                depth -= 1
+                if depth == 0:
+                    # server块结束
+                    in_server = False
+                    # 跳过这个server块（不添加到结果）
+                    i += 1
+                    continue
+            
+            # 如果不在server块内，添加到结果
+            if not in_server:
+                result.append(content[i])
+            
+            i += 1
+        
+        cleaned_content = "".join(result)
         
         # 移除可能产生的多余空行
-        cleansed_content = re.sub(r'\n\s*\n\s*\n', '\n\n', cleansed_content)
+        cleaned_content = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_content)
         
-        logger.info("Removed managed server blocks from config, kept default server placeholder")
+        logger.info("Removed all server blocks from config")
         
-        return cleansed_content
+        return cleaned_content
     
-    def build_managed_site_block(self, site: SiteConfigBase, config_generator) -> str:
+    def _build_server_block(self, site: SiteConfigBase, config_generator) -> str:
         """
-        构建标记为管理的server块
+        构建server块（不再添加管理标记）
         
         Args:
             site: 站点配置对象
             config_generator: 配置生成器实例
             
         Returns:
-            带有管理标记的server块
+            标准的server块
         """
+        # 生成标准的server配置（不添加管理标记）
+        server_config = config_generator.generate_config(site)
+        
+        # 添加空行分隔
+        return server_config + "\n\n"
         # 生成标准的server配置
         server_config = config_generator.generate_config(site)
         
@@ -114,47 +157,57 @@ class ConfigManager:
     
     def ensure_default_server(self, content: str) -> str:
         """
-        确保配置中包含默认的server占位块
+        确保配置中包含完整的默认server块（已禁用）
+        
+        注意：此方法已禁用，不再自动添加default server。
+        如果配置中没有server块，Nginx启动时将正常报错，
+        由用户自行创建server块。
         
         Args:
             content: 配置文件内容
             
         Returns:
-            包含默认server占位块的配置内容
+            原始配置内容（不做修改）
         """
-        # 检查是否已包含默认server占位块
-        # 搜索listen指令中包含default_server的server块
-        default_server_pattern = re.compile(
-            r'server\s*{[^}]*listen[^;]*default_server[^;]*;[^}]*server_name\s+_;[^}]*}',
-            re.MULTILINE | re.DOTALL
-        )
-        
-        if default_server_pattern.search(content):
-            logger.info("Default server placeholder already exists")
-            return content
-        
-        # 查找http块
-        http_pattern = re.compile(r'(http\s*{[^}]*?)(?=\n\s*server\s*{|\n\s*#.*Default Server|$)', re.MULTILINE | re.DOTALL)
-        http_match = http_pattern.search(content)
-        
-        default_server_block = '''\n    # Default Server (Placeholder - can be replaced by actual sites)\n    server {\n        listen 80 default_server;\n        server_name _;\n        \n        location / {\n            root html;\n            index index.html index.htm;\n        }\n        \n        error_page 500 502 503 504 /50x.html;\n        location = /50x.html {\n            root html;\n        }\n    }\n'''
-        
-        if http_match:
-            # 在http块内插入默认server块
-            insert_pos = http_match.end()
-            content = content[:insert_pos] + default_server_block + content[insert_pos:]
-            logger.info("Added default server placeholder to http block")
-        else:
-            # 如果没有找到合适的插入位置，在文件末尾添加
-            content += '\nhttp {\n    include mime.types;\n    default_type application/octet-stream;' + default_server_block + '}\n'
-            logger.info("Added http block with default server placeholder")
-        
+        logger.info("ensure_default_server is disabled, not adding default server block")
         return content
+    
+    def _get_site_conf_dir(self, config_path: Optional[Path] = None) -> Path:
+        """
+        获取站点配置目录路径（使用随机数命名）
+        
+        Args:
+            config_path: 配置文件路径（可选）
+            
+        Returns:
+            站点配置目录路径
+        """
+        if config_path is None:
+            config_path = self.config_path
+        
+        if config_path is None:
+            raise ValueError("Config path not specified")
+        
+        # 获取conf目录
+        conf_dir = config_path.parent
+        
+        # 如果设置了config_registry，使用其中的随机数
+        if self.config_registry is not None:
+            try:
+                return self.config_registry.get_site_conf_dir(conf_dir)
+            except Exception as e:
+                logger.warning(f"Failed to get site conf dir from registry: {e}")
+                # 回退到默认值
+                return conf_dir / "EN000_conf.d"
+        else:
+            # 如果没有config_registry，使用默认值
+            logger.warning("ConfigRegistry not set, using default site conf dir: EN000_conf.d")
+            return conf_dir / "EN000_conf.d"
     
     def update_config(self, sites: List[SiteConfigBase], config_path: Optional[Path] = None, 
                      config_generator=None) -> bool:
         """
-        更新配置文件 - 增量更新，保留其他配置（包括默认server占位块）
+        更新配置文件 - 将站点配置保存为独立文件到conf.d目录
         
         Args:
             sites: 站点配置列表
@@ -176,44 +229,49 @@ class ConfigManager:
                 logger.error("Config generator required")
                 return False
             
-            # 1. 加载原始配置
-            original_content = self.load_original_config(config_path)
-            
-            # 2. 移除之前管理的server块
-            cleansed_content = self.extract_managed_sites(original_content)
-            
-            # 3. 确保配置末尾有换行符
-            if not cleansed_content.endswith("\n"):
-                cleansed_content += "\n"
-            
-            # 4. 构建新的管理server块
-            managed_blocks = []
-            for site in sites:
-                managed_block = self.build_managed_site_block(site, config_generator)
-                managed_blocks.append(managed_block)
-            
-            # 5. 找出插入位置（在http块内的合适位置）
-            # 如果没有http块，创建默认的
-            if "http {" not in cleansed_content:
-                logger.warning("No http block found, creating default")
-                new_config = self._create_config_with_http_block(cleansed_content, managed_blocks)
-            else:
-                # 在http块内插入管理的server块
-                new_config = self._insert_managed_blocks(cleansed_content, managed_blocks)
-            
-            # 6. 确保包含默认server占位块
-            new_config = self.ensure_default_server(new_config)
-            
-            # 7. 创建备份
+            # 1. 创建备份
             backup_path = self.backup_config(config_path)
             if backup_path:
-                logger.info(f"Backup created: {backup_path}")
+                logger.info(f"Main config backup created: {backup_path}")
             
-            # 7. 写入新配置
-            config_path.write_text(new_config, encoding="utf-8")
+            # 2. 确保主配置包含正确的include语句
+            # 注意：现在使用随机数命名的目录，include指令已由接管时生成
+            # self._ensure_include_directive(config_path)
             
-            logger.info(f"Config updated successfully: {config_path}")
-            logger.info(f"Managed sites: {len(sites)}")
+            # 3. 确保站点配置目录存在（使用随机数命名）
+            site_conf_dir = self._get_site_conf_dir(config_path)
+            site_conf_dir.mkdir(exist_ok=True)
+            logger.info(f"Using site config directory: {site_conf_dir}")
+            
+            # 4. 将每个站点配置保存为独立文件
+            saved_files = []
+            for site in sites:
+                site_config_content = config_generator.generate_config(site)
+                site_file = site_conf_dir / f"{site.site_name}.conf"
+                
+                # 备份已存在的站点配置文件
+                if site_file.exists():
+                    self._backup_site_config(site_file)
+                
+                # 写入新的站点配置
+                site_file.write_text(site_config_content, encoding="utf-8")
+                saved_files.append(site_file.name)
+                
+                logger.info(f"Site config saved: {site_file}")
+            
+            # 5. 清理站点配置目录中不再使用的配置文件（可选）
+            # 保留不在当前站点列表中的配置文件
+            current_site_files = {f"{site.site_name}.conf" for site in sites}
+            for conf_file in site_conf_dir.glob("*.conf"):
+                if conf_file.name not in current_site_files:
+                    # 备份并删除旧配置文件
+                    self._backup_site_config(conf_file)
+                    conf_file.unlink()
+                    logger.info(f"Removed obsolete site config: {conf_file}")
+            
+            logger.info(f"Config updated successfully. Total sites: {len(sites)}")
+            logger.info(f"Site configs saved to: {site_conf_dir}")
+            logger.info(f"Saved files: {saved_files}")
             
             return True
             
@@ -221,15 +279,13 @@ class ConfigManager:
             logger.exception(f"Failed to update config: {e}")
             return False
     
-    def _insert_managed_blocks(self, content: str, managed_blocks: List[str]) -> str:
+    def _insert_server_blocks(self, content: str, server_blocks: List[str]) -> str:
         """
-        在http块内插入管理的server块
-        
-        策略：找到http块的正确结束位置，并在http块结束前插入server块
+        在http块内插入所有server块（重命名自 _insert_managed_blocks）
         
         Args:
-            content: 清洗后的配置内容（已移除管理的server块）
-            managed_blocks: 管理的server块列表
+            content: 清洗后的配置内容（已移除所有server块）
+            server_blocks: 所有server块列表
             
         Returns:
             完整的配置内容
@@ -247,11 +303,9 @@ class ConfigManager:
         if http_block_start == -1:
             # 没有找到http块，创建新的
             logger.warning("No http block found, creating one")
-            return self._create_config_with_http_block(content, managed_blocks)
+            return self._create_config_with_http_block(content, server_blocks)
         
         # 从http块开始，找到对应的结束位置
-        depth = 0
-        in_http = False
         brace_count = 0
         
         for i in range(len(lines)):
@@ -263,21 +317,19 @@ class ConfigManager:
                 continue
                 
             if i == http_block_start:
-                in_http = True
                 # Count braces in the http line
                 brace_count += line.count("{")
                 continue
             
-            if in_http:
-                # Count opening braces
-                brace_count += line.count("{")
-                # Count closing braces
-                brace_count -= line.count("}")
-                
-                # If brace count returns to 0, we found the end of http block
-                if brace_count == 0 and i > http_block_start:
-                    http_block_end = i
-                    break
+            # Count opening braces
+            brace_count += line.count("{")
+            # Count closing braces
+            brace_count -= line.count("}")
+            
+            # If brace count returns to 0, we found the end of http block
+            if brace_count == 0 and i > http_block_start:
+                http_block_end = i
+                break
         
         # 如果找到http块的结束位置，在该位置之前插入server块
         if http_block_start >= 0 and http_block_end > http_block_start:
@@ -292,8 +344,8 @@ class ConfigManager:
             if new_lines and new_lines[-1].strip():
                 new_lines.append("")
             
-            # 添加管理的server块
-            for block in managed_blocks:
+            # 添加所有server块
+            for block in server_blocks:
                 block_lines = block.splitlines()
                 for line in block_lines:
                     new_lines.append(line)
@@ -302,20 +354,20 @@ class ConfigManager:
             new_lines.extend(lines[http_block_end:])
             
             result = "\n".join(new_lines)
-            logger.info("Successfully inserted managed server blocks into http block")
+            logger.info(f"Successfully inserted {len(server_blocks)} server blocks into http block")
             return result
         else:
             # 没有找到正确的http块结束位置
             logger.warning("Could not find proper http block end, creating new http block")
-            return self._create_config_with_http_block(content, managed_blocks)
+            return self._create_config_with_http_block(content, server_blocks)
     
-    def _create_config_with_http_block(self, content: str, managed_blocks: List[str]) -> str:
+    def _create_config_with_http_block(self, content: str, server_blocks: List[str]) -> str:
         """
         创建包含http块的完整配置
         
         Args:
             content: 原始配置内容
-            managed_blocks: 管理的server块列表
+            server_blocks: 所有server块列表
             
         Returns:
             完整的配置内容
@@ -329,8 +381,8 @@ class ConfigManager:
         new_content += "    default_type application/octet-stream;\n"
         new_content += "\n"
         
-        # 添加管理的server块
-        for block in managed_blocks:
+        # 添加所有server块
+        for block in server_blocks:
             block_lines = block.splitlines()
             for line in block_lines:
                 if line.strip():
@@ -340,34 +392,6 @@ class ConfigManager:
         
         new_content += "}\n"
         return new_content
-    
-    def parse_managed_sites(self, content: str, config_parser) -> List[SiteConfigBase]:
-        """
-        解析标记为管理的server块
-        
-        Args:
-            content: 配置内容
-            config_parser: 配置解析器实例
-            
-        Returns:
-            管理的站点配置列表
-        """
-        sites = []
-        
-        # 查找所有被标记的部分
-        managed_pattern = re.compile(
-            rf"{re.escape(self.MANAGED_START)}.*?\n({self.MANAGED_MARKER}: (\w+).*?\n)(server\s*{{[^}}]*(?:{{[^}}]*}}[^}}]*)*}})\n{re.escape(self.MANAGED_END)}",
-            re.MULTILINE | re.DOTALL
-        )
-        
-        for match in managed_pattern.finditer(content):
-            server_block = match.group(3)
-            site = config_parser._parse_server_block(server_block)
-            if site:
-                sites.append(site)
-        
-        logger.info(f"Parsed {len(sites)} managed sites from config")
-        return sites
     
     def backup_config(self, config_path: Optional[Path] = None) -> Optional[Path]:
         """
@@ -409,9 +433,135 @@ class ConfigManager:
             logger.exception(f"Failed to backup config: {e}")
             return None
     
+    def _ensure_include_directive(self, config_path: Path):
+        """
+        确保主配置文件中包含正确的include语句
+        
+        Args:
+            config_path: 主配置文件路径
+        """
+        try:
+            if not config_path.exists():
+                logger.error(f"Config file not found: {config_path}")
+                return
+            
+            content = read_file_robust(config_path)
+            if content is None:
+                logger.error(f"无法读取配置文件: {config_path}")
+                return
+            
+            # 检查是否已包含include语句
+            include_pattern = re.compile(r'include\s+conf\.d/\*\.conf\s*;', re.MULTILINE)
+            
+            if not include_pattern.search(content):
+                logger.info("Include directive not found, adding it to http block")
+                
+                # 如果找到http块，在http块内添加include语句
+                if 'http {' in content:
+                    # 在http块开始后找到插入位置
+                    lines = content.splitlines()
+                    new_lines = []
+                    in_http = False
+                    brace_depth = 0
+                    include_added = False
+                    
+                    for line in lines:
+                        new_lines.append(line)
+                        
+                        # 检测http块
+                        stripped_line = line.strip()
+                        if stripped_line.startswith('http') and '{' in line:
+                            in_http = True
+                            # 统计当前行的括号深度
+                            brace_depth = line.count('{') - line.count('}')
+                        elif in_http and not include_added:
+                            # 更新括号深度
+                            brace_depth += line.count('{') - line.count('}')
+                            
+                            # 如果括号深度为0，说明http块结束
+                            if brace_depth <= 0 and '}' in line:
+                                # 在http块结束前插入include语句
+                                indent = '    '
+                                new_lines.insert(-1, f'{indent}# Include site configurations managed by easyNginx')
+                                new_lines.insert(-1, f'{indent}include conf.d/*.conf;')
+                                include_added = True
+                            # 如果找到了http块的第一行非注释、非空行，并且还没添加include
+                            elif (brace_depth > 0 and stripped_line and 
+                                  not stripped_line.startswith('#') and 
+                                  not stripped_line.startswith('http')):
+                                indent = '    '
+                                new_lines.insert(-1, f'{indent}# Include site configurations managed by easyNginx')
+                                new_lines.insert(-1, f'{indent}include conf.d/*.conf;')
+                                new_lines.append('')
+                                include_added = True
+                    
+                    content = '\n'.join(new_lines)
+                else:
+                    # 如果没有http块，创建一个包含include的http块
+                    content += '''
+http {
+    include mime.types;
+    default_type application/octet-stream;
+    
+    # Include site configurations managed by easyNginx
+    include conf.d/*.conf;
+}
+'''
+                
+                # 创建主配置备份
+                backup_path = self.backup_config(config_path)
+                if backup_path:
+                    logger.info(f"Backup created before updating include directive: {backup_path}")
+                
+                # 写入更新后的配置
+                config_path.write_text(content, encoding="utf-8")
+                logger.info("Added include directive to main config file")
+            else:
+                logger.info("Include directive already exists in config")
+                
+        except Exception as e:
+            logger.exception(f"Failed to ensure include directive: {e}")
+    
+    def _backup_site_config(self, site_file: Path) -> Optional[Path]:
+        """
+        备份站点配置文件
+        
+        Args:
+            site_file: 站点配置文件路径
+            
+        Returns:
+            备份文件路径或None
+        """
+        try:
+            if not site_file.exists():
+                return None
+            
+            from datetime import datetime
+            
+            backup_dir = site_file.parent / "backups"
+            backup_dir.mkdir(exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_name = f"{site_file.stem}_{timestamp}.conf.bak"
+            backup_path = backup_dir / backup_name
+            
+            content = read_file_robust(site_file)
+            if content is None:
+                logger.error(f"无法读取站点配置文件进行备份: {site_file}")
+                return None
+            
+            backup_path.write_text(content, encoding="utf-8")
+            
+            logger.info(f"Site config backup created: {backup_path}")
+            return backup_path
+            
+        except Exception as e:
+            logger.exception(f"Failed to backup site config {site_file}: {e}")
+            return None
+    
     def _create_default_config(self) -> str:
         """
-        创建默认的nginx配置
+        创建默认的nginx配置（不包含站点信息）
         
         Returns:
             默认配置内容
@@ -427,12 +577,7 @@ http {
     include mime.types;
     default_type application/octet-stream;
     
-    # Default server
-    server {
-        listen 80;
-        server_name localhost;
-        root html;
-        index index.html;
-    }
+    # Include site configurations managed by easyNginx
+    include conf.d/*.conf;
 }
 '''

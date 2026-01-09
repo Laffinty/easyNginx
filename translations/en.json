@@ -11,6 +11,7 @@
   "start_nginx": "Start Nginx",
   "stop_nginx": "Stop Nginx",
   "reload_config": "Reload Config",
+  "refresh_sites": "Refresh Site List",
   "test_config": "Test Config Syntax",
   "backup_config": "Backup Config",
   "language_menu": "Language",

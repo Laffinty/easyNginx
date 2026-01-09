@@ -3,6 +3,7 @@
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 import platform
+from datetime import datetime
 from PySide6.QtCore import QObject, Signal, QThread, QTimer
 from loguru import logger
 from models.site_config import SiteConfigBase, create_site_config
@@ -76,10 +77,13 @@ class MainViewModel(QObject):
         super().__init__()
         
         # Initialize services
+        from utils.config_registry import ConfigRegistry
+        self.config_registry = ConfigRegistry()
+        
         self.nginx_service = NginxService(nginx_path, config_path)
         self.config_generator = ConfigGenerator()
         self.config_parser = ConfigParser()
-        self.config_manager = ConfigManager(Path(config_path) if config_path else None)
+        self.config_manager = ConfigManager(Path(config_path) if config_path else None, self.config_registry)
         self.language_manager = LanguageManager()
         
         # State management
@@ -106,7 +110,7 @@ class MainViewModel(QObject):
             self.error_occurred.emit(error_msg)
             return False
         
-        logger.info("Nginx is available ✓")
+        logger.info("Nginx is available [OK]")
         
         # 检查配置文件是否存在
         if not self.nginx_service.config_path or not Path(self.nginx_service.config_path).exists():
@@ -114,27 +118,17 @@ class MainViewModel(QObject):
             logger.warning(warning_msg)
             # 不返回False,允许继续运行,只是站点列表为空
             self.sites = []
-            self.site_list_changed.emit([])
+            # 不发送信号，等待UI准备好后由外部调用load_sites()
         else:
-            # 加载现有配置 - 这是同步nginx.conf中站点配置的关键步骤
-            logger.info("Starting configuration sync from nginx.conf...")
-            
-            # 设置配置管理器路径
+            # 设置配置管理器路径（但不立即加载，等待UI准备好）
             self.config_manager.config_path = Path(self.nginx_service.config_path)
-            
-            # 加载管理的站点
-            self.load_sites()
-            
-            if self.sites:
-                logger.info(f"Configuration sync completed: {len(self.sites)} managed sites loaded")
-            else:
-                logger.info("Configuration sync completed: No managed sites found in nginx.conf")
+            logger.info("Configuration ready for sync (will load when UI is ready)")
         
         # 启动后台状态监控线程
         logger.info("Starting status monitoring thread...")
         self._start_status_monitoring()
         
-        logger.info("MainViewModel initialized successfully ✓")
+        logger.info("MainViewModel initialized successfully [OK]")
         logger.info("=" * 60)
         return True
     
@@ -174,7 +168,7 @@ class MainViewModel(QObject):
         self.nginx_status_changed.emit(status)
     
     def load_sites(self):
-        """加载站点列表 - 加载所有server块（包括管理的和非管理的）."""
+        """加载站点列表 - 所有站点都被视为可管理的."""
         logger.info("Starting to load all sites from nginx configuration...")
         
         try:
@@ -197,48 +191,23 @@ class MainViewModel(QObject):
             
             logger.info(f"Reading nginx configuration from: {config_path}")
             
-            # 加载配置文件内容（使用健壮的编码检测）
-            content = read_file_robust(config_path)
-            if content is None:
-                logger.error(f"无法读取配置文件: {config_path}")
-                self.sites = []
-                self.site_list_changed.emit([])
-                return
+            # 使用配置解析器读取主配置和站点配置目录
+            all_sites = self.config_parser.parse_config_file(config_path, self.config_registry)
+            logger.info(f"Loaded {len(all_sites)} sites from all config files")
             
-            all_site_items = []
+            # 将所有站点添加到内部列表（全部视为可管理）
+            self.sites = all_sites.copy()
             
-            # 1. 加载管理的站点（带easyNginx标记）
-            managed_sites = self.config_manager.parse_managed_sites(content, self.config_parser)
-            logger.info(f"Loaded {len(managed_sites)} managed sites from config")
+            # 构建站点列表项（全部视为可管理）
+            site_items = self.config_parser.build_site_list(all_sites)
             
-            # 将管理的站点添加到sites列表
-            self.sites = managed_sites.copy()
-            
-            # 构建管理的站点列表项
-            managed_items = self.config_parser.build_site_list(managed_sites, is_managed=True)
-            all_site_items.extend(managed_items)
-            
-            # 2. 加载非管理的站点（包括默认server）
-            # 使用config_parser解析所有server块
-            all_sites = self.config_parser.parse_config_content(content)
-            
-            # 过滤掉已经包含在managed_sites中的站点
-            managed_names = [s.site_name for s in managed_sites]
-            unmanaged_sites = [site for site in all_sites if site.site_name not in managed_names]
-            
-            logger.info(f"Loaded {len(unmanaged_sites)} unmanaged sites from config")
-            
-            # 构建非管理的站点列表项
-            unmanaged_items = self.config_parser.build_site_list(unmanaged_sites, is_managed=False)
-            all_site_items.extend(unmanaged_items)
-            
-            logger.info(f"Total sites loaded: {len(all_site_items)} (managed: {len(managed_items)}, unmanaged: {len(unmanaged_items)})")
+            logger.info(f"Total sites loaded: {len(site_items)}")
             
             # 发送所有站点到UI显示
-            self.site_list_changed.emit(all_site_items)
+            self.site_list_changed.emit(site_items)
             
             # 发送操作完成信号
-            self.operation_completed.emit(True, f"从nginx.conf加载 {len(all_site_items)} 个站点（{len(managed_items)}个受管）")
+            self.operation_completed.emit(True, f"从nginx.conf加载 {len(site_items)} 个站点")
             
         except Exception as e:
             logger.exception(f"Failed to load sites: {e}")
@@ -516,3 +485,11 @@ class MainViewModel(QObject):
         """更新Nginx和配置路径."""
         self.nginx_service.set_paths(nginx_path, config_path)
         self.initialize()
+    
+    def refresh_sites(self):
+        """
+        从nginx.conf重新加载站点列表
+        用于手动刷新或定时刷新
+        """
+        logger.info("User triggered manual refresh of sites from nginx.conf")
+        self.load_sites()

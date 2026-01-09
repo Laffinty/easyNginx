@@ -304,16 +304,27 @@ def main():
         logger.info("Creating MainViewModel...")
         main_viewmodel = MainViewModel(nginx_path, config_path)
         
-        # 初始化ViewModel（包含配置同步）
-        logger.info("Initializing MainViewModel and syncing configuration...")
+        # 创建主窗口（先创建UI，确保信号连接完成）
+        logger.info("Creating MainWindow...")
+        main_window = MainWindow(main_viewmodel)
+        
+        # 初始化ViewModel（但不加载站点）
+        logger.info("Initializing MainViewModel...")
         if not main_viewmodel.initialize():
             logger.error("Failed to initialize MainViewModel")
             sys.exit(1)
         
-        logger.info("Configuration sync completed successfully")
+        # 加载站点并确保UI更新完成（使用processEvents确保信号处理）
+        logger.info("Loading sites from nginx.conf...")
+        main_viewmodel.load_sites()
+        app.processEvents()  # 处理所有待处理的事件，确保UI更新
         
-        # 创建主窗口
-        main_window = MainWindow(main_viewmodel)
+        if main_viewmodel.sites:
+            logger.info(f"Configuration sync completed: {len(main_viewmodel.sites)} managed sites loaded")
+        else:
+            logger.info("Configuration sync completed: No managed sites found in nginx.conf")
+        
+        # 显示主窗口（此时站点列表已加载并显示）
         main_window.show()
         
         logger.info("Application started successfully")

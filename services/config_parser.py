@@ -30,12 +30,13 @@ class ConfigParser:
             re.MULTILINE | re.DOTALL
         )
     
-    def parse_config_file(self, config_path: Path) -> List[SiteConfigBase]:
+    def parse_config_file(self, config_path: Path, config_registry=None) -> List[SiteConfigBase]:
         """
-        解析nginx.conf文件，支持include指令和各种格式
+        解析nginx.conf文件和站点配置目录中的所有配置文件
         
         Args:
-            config_path: 配置文件路径
+            config_path: 主配置文件路径(nginx.conf)
+            config_registry: 注册表管理器实例（可选），用于获取随机数命名的目录
             
         Returns:
             站点配置对象列表
@@ -44,22 +45,66 @@ class ConfigParser:
             logger.error(f"Config file not found: {config_path}")
             return []
         
+        all_sites = []
+        
         try:
-            # 使用健壮的编码检测读取文件
-            content = read_file_robust(config_path)
-            if content is None:
-                logger.error(f"无法读取配置文件: {config_path}")
-                return []
+            # 1. 解析主配置文件
+            main_content = read_file_robust(config_path)
+            if main_content is None:
+                logger.error(f"无法读取主配置文件: {config_path}")
+            else:
+                logger.debug(f"Parsing main config: {config_path} (size: {len(main_content)} bytes)")
+                main_sites = self.parse_config_content(main_content)
+                all_sites.extend(main_sites)
+                logger.info(f"[OK] Parsed {len(main_sites)} sites from main config")
             
-            logger.debug(f"Parsing config file: {config_path} (size: {len(content)} bytes)")
-            sites = self.parse_config_content(content)
+            # 2. 解析站点配置目录中的所有配置文件
+            # 首先尝试从注册表获取随机数命名的目录
+            site_conf_dir = None
             
-            logger.info(f"✓ Parsed {len(sites)} sites from {config_path.name}")
-            return sites
+            if config_registry is not None:
+                try:
+                    site_conf_dir = config_registry.get_site_conf_dir(config_path.parent)
+                    logger.info(f"Using site config directory from registry: {site_conf_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to get site conf dir from registry: {e}")
+            
+            # 如果无法从注册表获取，回退到默认的conf.d
+            if site_conf_dir is None or not site_conf_dir.exists():
+                site_conf_dir = config_path.parent / "conf.d"
+                logger.info(f"Falling back to default site config directory: {site_conf_dir}")
+            
+            # 检查站点配置目录是否存在
+            if site_conf_dir.exists() and site_conf_dir.is_dir():
+                conf_files = list(site_conf_dir.glob("*.conf"))
+                
+                if conf_files:
+                    for conf_file in conf_files:
+                        try:
+                            conf_content = read_file_robust(conf_file)
+                            if conf_content is None:
+                                logger.error(f"无法读取站点配置文件: {conf_file}")
+                                continue
+                            
+                            logger.debug(f"Parsing site config: {conf_file} (size: {len(conf_content)} bytes)")
+                            conf_sites = self.parse_config_content(conf_content)
+                            all_sites.extend(conf_sites)
+                            logger.info(f"[OK] Parsed {len(conf_sites)} sites from {conf_file.name}")
+                            
+                        except Exception as e:
+                            logger.warning(f"Failed to parse site config {conf_file}: {e}")
+                            continue
+                else:
+                    logger.info(f"No .conf files found in {site_conf_dir}")
+            else:
+                logger.info(f"Site config directory not found: {site_conf_dir}")
+            
+            logger.info(f"[OK] Total parsed {len(all_sites)} sites from all config files")
+            return all_sites
             
         except Exception as e:
-            logger.exception(f"Failed to parse config file {config_path}: {e}")
-            return []
+            logger.exception(f"Failed to parse config files: {e}")
+            return all_sites  # 返回已解析的站点，不要完全失败
     
     def parse_config_content(self, content: str) -> List[SiteConfigBase]:
         """
@@ -147,7 +192,7 @@ class ConfigParser:
             
             if config:
                 site_config = SITE_CONFIG_TYPES[site_type](**config)
-                logger.info(f"✓ Successfully parsed site: {config['site_name']} (type: {site_type})")
+                logger.info(f"[OK] Successfully parsed site: {config['site_name']} (type: {site_type})")
                 return site_config
             else:
                 logger.warning("Failed to build site configuration")
@@ -311,12 +356,11 @@ class ConfigParser:
             return match.group(1).strip()
         return None
     
-    def build_site_list(self, sites: List[SiteConfigBase], is_managed: bool = True) -> List[SiteListItem]:
-        """构建站点列表项.
+    def build_site_list(self, sites: List[SiteConfigBase]) -> List[SiteListItem]:
+        """构建站点列表项 - 所有站点都被视为可管理的.
         
         Args:
             sites: 站点配置列表
-            is_managed: 是否由easyNginx管理
         """
         items = []
         
@@ -329,7 +373,7 @@ class ConfigParser:
                 server_name=site.server_name,
                 enable_https=site.enable_https,
                 status="configured",
-                is_managed=is_managed
+                is_managed=True  # 所有站点都被视为可管理
             )
             items.append(item)
         

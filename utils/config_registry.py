@@ -19,6 +19,7 @@ class ConfigRegistry:
     KEY_CONFIG_PATH = "config_path"
     KEY_TAKEOVER_STATUS = "takeover_status"
     KEY_TAKEOVER_TIME = "takeover_time"
+    KEY_SITE_CONF_RANDOM = "site_conf_random"
     
     def __init__(self):
         """初始化注册表管理器。"""
@@ -173,3 +174,52 @@ class ConfigRegistry:
         nginx_exe = nginx_dir / "nginx.exe"
         
         return nginx_dir.exists() and nginx_exe.exists()
+    
+    def generate_site_conf_random(self) -> str:
+        """
+        生成站点配置目录的随机数标识符。
+        
+        生成一个5位随机字符串（字母+数字），用于命名站点配置目录。
+        
+        Returns:
+            随机字符串（如: J43R8）
+        """
+        import random
+        import string
+        
+        # 生成5位随机字符串（字母+数字）
+        random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+        
+        # 保存到注册表
+        if self.set(self.KEY_SITE_CONF_RANDOM, random_str):
+            logger.info(f"Generated site conf random identifier: {random_str}")
+            return random_str
+        else:
+            logger.error("Failed to save site conf random identifier")
+            # 返回一个默认值
+            return "EN000"
+    
+    def get_site_conf_random(self) -> str:
+        """
+        获取站点配置目录的随机数标识符。
+        
+        Returns:
+            随机字符串（如: J43R8），如果未设置则返回默认值
+        """
+        random_id = self.get(self.KEY_SITE_CONF_RANDOM, "EN000")
+        logger.info(f"Site conf random identifier: {random_id}")
+        return random_id
+    
+    def get_site_conf_dir(self, nginx_conf_dir: Path) -> Path:
+        """
+        获取站点配置目录路径。
+        
+        Args:
+            nginx_conf_dir: Nginx配置目录（conf目录）
+            
+        Returns:
+            站点配置目录路径（如: conf/J43R8_conf.d/）
+        """
+        random_id = self.get_site_conf_random()
+        conf_dir_name = f"{random_id}_conf.d"
+        return nginx_conf_dir / conf_dir_name

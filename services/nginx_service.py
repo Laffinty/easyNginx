@@ -68,10 +68,12 @@ class NginxService:
                 ["where", "nginx.exe"],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=5
             )
             if result.returncode == 0:
-                path = result.stdout.strip().split('\n')[0]
+                path = result.stdout.strip().split('\n')[0] if result.stdout else ""
                 if Path(path).exists():
                     logger.info(f"Detected nginx.exe from PATH: {path}")
                     return path
@@ -126,10 +128,12 @@ class NginxService:
                 [self._nginx_path, "-v"],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=5
             )
             if result.returncode == 0:
-                version = result.stderr.strip()  # nginx -v输出到stderr
+                version = result.stderr.strip() if result.stderr else "Nginx available"
                 logger.info(f"Nginx version: {version}")
                 return True
         except Exception as e:
@@ -152,17 +156,19 @@ class NginxService:
                 [self._nginx_path, "-t", "-c", self._config_path],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',  # 明确指定UTF-8编码
+                errors='replace',  # 解码错误时用?替代，避免崩溃
                 timeout=10
             )
             
             if result.returncode == 0:
                 # 提取成功消息中的配置文件路径
-                output = result.stderr.strip()  # nginx -t输出到stderr
+                output = result.stderr.strip() if result.stderr else "Configuration test successful"
                 logger.info(f"Config test passed: {output}")
                 return True, output
             else:
                 # 提取错误信息
-                error_output = result.stderr.strip()
+                error_output = result.stderr.strip() if result.stderr else "Unknown error"
                 logger.error(f"Config test failed: {error_output}")
                 return False, error_output
                 
@@ -227,6 +233,8 @@ class NginxService:
                 [self._nginx_path, "-s", "quit", "-c", self._config_path],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=10
             )
             
@@ -234,7 +242,7 @@ class NginxService:
                 logger.info("Nginx stopped gracefully")
                 return True, "Nginx stopped gracefully"
             else:
-                error_msg = result.stderr.strip()
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
                 logger.error(f"Failed to stop Nginx: {error_msg}")
                 return False, error_msg
                 
@@ -267,6 +275,8 @@ class NginxService:
                 [self._nginx_path, "-s", "reload", "-c", self._config_path],
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=10
             )
             
@@ -274,7 +284,7 @@ class NginxService:
                 logger.info("Nginx configuration reloaded")
                 return True, "Configuration reloaded successfully"
             else:
-                error_msg = result.stderr.strip()
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
                 logger.error(f"Failed to reload Nginx: {error_msg}")
                 return False, error_msg
                 

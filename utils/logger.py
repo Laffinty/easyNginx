@@ -20,6 +20,7 @@ def init_logger(log_dir: str = "logs"):
     logger.remove()
     
     # 控制台输出（INFO级别）
+    # 注意：sys.stdout 不支持 encoding 参数，只适用于文件输出
     logger.add(
         sys.stdout,
         level="INFO",
@@ -28,6 +29,7 @@ def init_logger(log_dir: str = "logs"):
                "<cyan>{name}</cyan>:<cyan>{line}</cyan> - "
                "<level>{message}</level>",
         colorize=True
+        # 不指定 encoding，让 Python 自动处理控制台编码
     )
     
     # 文件输出（DEBUG级别）

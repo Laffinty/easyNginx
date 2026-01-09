@@ -10,7 +10,7 @@ cd /d "%~dp0"
 IF EXIST venv\Scripts\activate.bat (
     echo 检测到虚拟环境，正在激活...
     call venv\Scripts\activate.bat
-    echo 虚拟环境已激活 ✓
+    echo 虚拟环境已激活 [OK]
 ) ELSE (
     echo 未检测到虚拟环境，使用系统 Python
 )

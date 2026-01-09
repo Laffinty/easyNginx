@@ -10,6 +10,7 @@
   "start_nginx": "启动Nginx",
   "stop_nginx": "停止Nginx",
   "reload_config": "重载配置",
+  "refresh_sites": "刷新站点列表",
   "test_config": "测试配置语法",
   "backup_config": "备份配置文件",
   "language_menu": "语言",

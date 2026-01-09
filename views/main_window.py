@@ -128,6 +128,12 @@ class MainWindow(QMainWindow):
         
         action_menu.addSeparator()
         
+        # Refresh sites list from nginx.conf
+        refresh_action = action_menu.addAction(self.language_manager.get("refresh_sites"))
+        refresh_action.triggered.connect(self._on_refresh_sites)
+        
+        action_menu.addSeparator()
+        
         # Test config
         test_action = action_menu.addAction(self.language_manager.get("test_config"))
         test_action.triggered.connect(self.main_viewmodel.test_config)
@@ -216,23 +222,9 @@ class MainWindow(QMainWindow):
     
     @Slot(SiteListItem)
     def _on_site_selected_with_item(self, site_item):
-        """站点被选中（带完整信息）."""
-        if site_item.is_managed:
-            # 如果是管理的站点，按正常方式编辑
-            self._on_site_selected(site_item.site_name)
-        else:
-            # 非管理站点，显示提示
-            QMessageBox.information(
-                self,
-                "非管理站点",
-                f"站点 '{site_item.site_name}' 不是由easyNginx管理的，无法直接编辑。\n\n"
-                f"类型: {site_item.site_type}\n"
-                f"端口: {site_item.listen_port}\n"
-                f"域名: {site_item.server_name}\n\n"
-                "您可以在nginx.conf中手动编辑此站点配置，或者：\n"
-                "1. 删除此站点\n"
-                "2. 使用'接管站点'功能将其转为管理站点"
-            )
+        """站点被选中（带完整信息）- 所有站点都可以编辑."""
+        # 所有站点都可以直接编辑（移除非管理站点的限制）
+        self._on_site_selected(site_item.site_name)
     
     def _on_add_static_site(self):
         """添加静态站点."""
@@ -259,26 +251,17 @@ class MainWindow(QMainWindow):
                 self.main_viewmodel.add_site(config)
     
     @Slot(SiteListItem)
-    def _on_delete_site(self, site_item):
-        """删除站点."""
-        if not site_item.is_managed:
-            QMessageBox.information(
-                self,
-                "非管理站点",
-                f"站点 '{site_item.site_name}' 不是由easyNginx管理的，无法直接删除。\n\n"
-                "您可以在nginx.conf中手动删除此站点的server块。"
-            )
-            return
-        
+    def _on_delete_site(self, site_name: str):
+        """删除站点 - 所有站点都可以删除."""
         reply = QMessageBox.question(
             self,
             "确认删除",
-            f"确定要删除站点 '{site_item.site_name}' 吗？",
+            f"确定要删除站点 '{site_name}' 吗？",
             QMessageBox.Yes | QMessageBox.No
         )
         
         if reply == QMessageBox.Yes:
-            self.main_viewmodel.delete_site(site_item.site_name)
+            self.main_viewmodel.delete_site(site_name)
     
 
     
@@ -473,6 +456,16 @@ class MainWindow(QMainWindow):
         """About dialog."""
         about_text = self.language_manager.get("about_content")
         QMessageBox.about(self, self.language_manager.get("about_title"), about_text)
+    
+    @Slot()
+    def _on_refresh_sites(self):
+        """刷新站点列表."""
+        try:
+            logger.info("Refreshing sites from nginx.conf...")
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self.main_viewmodel.refresh_sites()
+        finally:
+            QApplication.restoreOverrideCursor()
     
     def closeEvent(self, event):
         """Close event."""
