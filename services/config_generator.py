@@ -204,7 +204,13 @@ class ConfigGenerator:
             
             # 日志优化
             "access_log": "off",
-            "error_log_level": "warn"
+            "error_log_level": "warn",
+            
+            # 反向代理优化 (Proxy-specific)
+            "proxy_buffer_size": "4k",
+            "proxy_buffers_number": 8,
+            "proxy_buffer_size_for_buffers": "4k",
+            "proxy_busy_buffers_size": "8k"
         }
     
     def _get_common_security_settings(self) -> Dict[str, Any]:

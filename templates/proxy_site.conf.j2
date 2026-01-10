@@ -94,7 +94,7 @@ server {
         # 缓冲区配置
         proxy_buffering on;
         proxy_buffer_size {{ performance_baseline.proxy_buffer_size }};
-        proxy_buffers {{ performance_baseline.proxy_buffers_number }} {{ performance_baseline.proxy_buffer_size }};
+        proxy_buffers {{ performance_baseline.proxy_buffers_number }} {{ performance_baseline.proxy_buffer_size_for_buffers }};
         proxy_busy_buffers_size {{ performance_baseline.proxy_busy_buffers_size }};
         
         # 错误处理
