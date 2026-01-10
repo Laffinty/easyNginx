@@ -175,11 +175,18 @@ class BaseSiteConfigDialog(QDialog):
     # 槽函数
     def _on_https_toggled(self, state):
         """HTTPS开关切换."""
-        enabled = state == Qt.Checked
+        # 使用isChecked()而不是state参数，确保正确获取状态
+        enabled = self.https_check.isChecked()
         self.ssl_cert_edit.setEnabled(enabled)
         self.ssl_key_edit.setEnabled(enabled)
         self.cert_browse_btn.setEnabled(enabled)
         self.key_browse_btn.setEnabled(enabled)
+        
+        # 根据HTTPS状态自动设置监听端口
+        if enabled:
+            self.port_spin.setValue(443)
+        else:
+            self.port_spin.setValue(80)
         
     def _browse_cert(self):
         """浏览证书."""

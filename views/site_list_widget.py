@@ -100,6 +100,9 @@ class SiteListWidget(QWidget):
         if index.isValid():
             site_name = self.model.item(index.row(), 0).data(Qt.UserRole)
             
+            # 查找对应的 SiteListItem 对象
+            site_item = next((item for item in self.site_items if item.site_name == site_name), None)
+            
             menu = QMenu()
             
             edit_action = QAction(self.main_viewmodel.language_manager.get("edit"), self)
@@ -107,7 +110,10 @@ class SiteListWidget(QWidget):
             menu.addAction(edit_action)
             
             delete_action = QAction(self.main_viewmodel.language_manager.get("delete"), self)
-            delete_action.triggered.connect(lambda: self._confirm_delete(site_name))
+            if site_item:
+                delete_action.triggered.connect(lambda: self._confirm_delete(site_item))
+            else:
+                delete_action.triggered.connect(lambda: self._confirm_delete_site_name(site_name))
             menu.addAction(delete_action)
             
             menu.exec(self.site_table.mapToGlobal(position))

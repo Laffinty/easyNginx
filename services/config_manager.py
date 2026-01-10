@@ -522,6 +522,54 @@ http {
         except Exception as e:
             logger.exception(f"Failed to ensure include directive: {e}")
     
+    def delete_site_config(self, site_name: str, config_path: Optional[Path] = None) -> bool:
+        """
+        删除指定站点的配置文件
+        
+        Args:
+            site_name: 站点名称
+            config_path: Nginx主配置文件路径（可选）
+            
+        Returns:
+            是否成功删除
+        """
+        try:
+            if config_path is None:
+                config_path = self.config_path
+            
+            if config_path is None:
+                logger.error("No config path specified")
+                return False
+            
+            # 获取站点配置目录
+            site_conf_dir = self._get_site_conf_dir(config_path)
+            
+            if not site_conf_dir.exists():
+                logger.warning(f"Site config directory not found: {site_conf_dir}")
+                return False
+            
+            # 构建站点配置文件路径
+            site_config_file = site_conf_dir / f"{site_name}.conf"
+            
+            if not site_config_file.exists():
+                logger.warning(f"Site config file not found: {site_config_file}")
+                return False
+            
+            # 备份站点配置文件
+            backup_path = self._backup_site_config(site_config_file)
+            if backup_path:
+                logger.info(f"Site config backup created before deletion: {backup_path}")
+            
+            # 删除配置文件
+            site_config_file.unlink()
+            logger.info(f"Deleted site config file: {site_config_file}")
+            
+            return True
+            
+        except Exception as e:
+            logger.exception(f"Failed to delete site config for '{site_name}': {e}")
+            return False
+    
     def _backup_site_config(self, site_file: Path) -> Optional[Path]:
         """
         备份站点配置文件

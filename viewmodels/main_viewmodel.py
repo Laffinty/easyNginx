@@ -322,17 +322,26 @@ class MainViewModel(QObject):
                 self.error_occurred.emit(f"Site '{site_name}' not found")
                 return False
             
-            # 确认删除（由UI层处理）
+            # 删除站点配置文件（在从列表移除之前）
+            if hasattr(self, 'config_manager') and self.config_manager:
+                try:
+                    self.config_manager.delete_site_config(site_name)
+                except Exception as e:
+                    logger.warning(f"Failed to delete site config file for '{site_name}': {e}")
+                    # 不阻止站点删除操作继续
+            
+            # 从站点列表中移除
             self.sites.remove(site)
             
-            # 重新部署
+            # 重新部署配置（这会刷新站点列表）
             if self._deploy_config():
                 self.load_sites()
                 self.operation_completed.emit(True, f"Site '{site_name}' deleted successfully")
                 return True
             else:
-                # 回滚
+                # 如果部署失败，回滚操作（但配置文件已经删除，无法回滚）
                 self.sites.append(site)
+                self.error_occurred.emit(f"Failed to delete site '{site_name}': Configuration deployment failed")
                 return False
                 
         except Exception as e:
