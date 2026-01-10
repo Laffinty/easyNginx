@@ -31,55 +31,6 @@ class ConfigParser:
             re.MULTILINE | re.DOTALL
         )
     
-    def _extract_server_blocks(self, content: str) -> List[str]:
-        """
-        提取所有server块内容（使用手动方法，更可靠）
-        
-        Args:
-            content: 配置内容
-            
-        Returns:
-            server块内容列表
-        """
-        blocks = []
-        pos = 0
-        
-        while pos < len(content):
-            # 查找server关键字
-            server_pos = content.find('server', pos)
-            if server_pos == -1:
-                break
-            
-            # 确认是server块开始（后面是空格或{）
-            next_char_pos = server_pos + 6
-            if next_char_pos < len(content):
-                next_char = content[next_char_pos]
-                if next_char.isspace() or next_char == '{':
-                    # 找到server块开始
-                    bracket_pos = content.find('{', server_pos)
-                    if bracket_pos != -1:
-                        # 使用栈来查找匹配的结束括号
-                        depth = 1
-                        search_pos = bracket_pos + 1
-                        while search_pos < len(content) and depth > 0:
-                            if content[search_pos] == '{':
-                                depth += 1
-                            elif content[search_pos] == '}':
-                                depth -= 1
-                            search_pos += 1
-                        
-                        if depth == 0:
-                            # 提取完整的server块
-                            block = content[server_pos:search_pos]
-                            blocks.append(block)
-                            pos = search_pos
-                            continue
-            
-            # 如果没找到，继续搜索下一个位置
-            pos = server_pos + 6
-        
-        return blocks
-    
     def parse_config_file(self, config_path: Path, config_registry=None) -> List[SiteConfigBase]:
         """
         解析nginx.conf文件和站点配置目录中的所有配置文件
@@ -169,8 +120,8 @@ class ConfigParser:
         """
         sites = []
         
-        # 查找所有server块（使用更可靠的手动提取方法）
-        server_blocks = self._extract_server_blocks(content)
+        # 查找所有server块
+        server_blocks = self.server_block_pattern.findall(content)
         
         for i, server_block in enumerate(server_blocks):
             try:
@@ -198,50 +149,36 @@ class ConfigParser:
             logger.debug("Parsing server block...")
             
             # 清理注释（以#开头的行），避免中文字符干扰正则表达式
-            # 只删除纯粹的注释行（不以nginx指令开头）和空行
+            # 只删除纯粹的注释行和空行
             lines = server_block.split('\n')
             cleaned_lines = []
             for line in lines:
                 stripped = line.strip()
-                # 如果是纯粹注释行（以#开头）或是空行，跳过
+                # 如果行以#开头（纯粹注释）或者是空行，跳过
                 if stripped.startswith('#') or len(stripped) == 0:
                     continue
-                # 检查是否是包含nginx指令的行（不以#开头，且有内容）
-                # 如果该行有实际内容（不只是注释），保留
+                # 否则保留该行（包括可能包含行尾注释的指令行）
                 cleaned_lines.append(line)
             
             server_block_clean = '\n'.join(cleaned_lines)
             
-            # 移除server块的开始标记（server {）以避免干扰指令提取
-            server_block_clean = re.sub(r'^\s*server\s*\{', '', server_block_clean, flags=re.MULTILINE)
-            
-            # 先提取location块（从server块中移除它们，避免干扰指令提取）
-            server_block_for_directives = server_block_clean
-            locations = []
-            for match in self.location_pattern.finditer(server_block_clean):
-                location_path = match.group(1)
-                location_body = match.group(2)
-                locations.append({"path": location_path, "body": location_body})
-                # 从server块中移除location块，避免干扰其他指令的提取
-                server_block_for_directives = server_block_for_directives.replace(match.group(0), '')
-            
-            logger.debug(f"Extracted {len(locations)} location blocks")
-            
-            # 提取所有指令（跳过server指令本身）
+            # 提取所有指令
             directives = {}
-            for match in self.directive_pattern.finditer(server_block_for_directives):
+            for match in self.directive_pattern.finditer(server_block_clean):
                 key = match.group(1)
                 value = match.group(2).strip()
-                logger.debug(f"Found directive: {key} = {repr(value)}")
-                # 跳过server指令（server块的开始标记）
-                if key == 'server':
-                    logger.debug("Skipping 'server' directive")
-                    continue
                 directives[key] = value
             
             logger.debug(f"Extracted {len(directives)} directives")
             
-            # Location blocks were already extracted above
+            # 提取location块
+            locations = []
+            for match in self.location_pattern.finditer(server_block):
+                location_path = match.group(1)
+                location_body = match.group(2)
+                locations.append({"path": location_path, "body": location_body})
+            
+            logger.debug(f"Extracted {len(locations)} location blocks")
             
             # 检测站点类型
             site_type = self._detect_site_type(directives, locations)
