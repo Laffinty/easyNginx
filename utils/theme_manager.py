@@ -148,6 +148,31 @@ class ThemeManager(QObject):
                 background-color: #3c3c3c;
                 color: #ffffff;
             }
+            QMenu {
+                background-color: #3c3c3c;
+                border: 1px solid #555555;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 24px 6px 24px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #0078d4;
+                color: #ffffff;
+            }
+            QMenu::item:disabled {
+                color: #808080;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #555555;
+                margin: 4px 0px 4px 0px;
+            }
+            QMenu::indicator {
+                width: 16px;
+                height: 16px;
+            }
             """
         
         elif theme == "high_contrast":
@@ -176,6 +201,32 @@ class ThemeManager(QObject):
                 background-color: #000000;
                 color: #ffffff;
                 border: 2px solid #ffff00;
+            }
+            QMenu {
+                background-color: #000000;
+                border: 2px solid #ffff00;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 24px 6px 24px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #ffff00;
+                color: #000000;
+            }
+            QMenu::item:disabled {
+                color: #808080;
+            }
+            QMenu::separator {
+                height: 2px;
+                background-color: #ffff00;
+                margin: 4px 0px 4px 0px;
+            }
+            QMenu::indicator {
+                width: 16px;
+                height: 16px;
+                border: 1px solid #ffff00;
             }
             """
         
@@ -265,6 +316,34 @@ class ThemeManager(QObject):
                 padding: 0 4px;
                 color: #323130;
                 font-weight: 600;
+            }
+            QMenu {
+                background-color: #ffffff;
+                border: 1px solid #e1dfdd;
+                border-radius: 4px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 24px 6px 24px;
+                border-radius: 4px;
+                background-color: transparent;
+            }
+            QMenu::item:selected {
+                background-color: #e1f0ff;
+                color: #323130;
+            }
+            QMenu::item:disabled {
+                color: #a19f9d;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #e1dfdd;
+                margin: 4px 0px 4px 0px;
+            }
+            QMenu::indicator {
+                width: 16px;
+                height: 16px;
+                padding-left: 4px;
             }
             """
 

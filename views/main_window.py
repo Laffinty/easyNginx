@@ -1,5 +1,7 @@
 """Main application window."""
 
+import sys
+import os
 from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, 
@@ -361,10 +363,22 @@ class MainWindow(QMainWindow):
         # 创建托盘图标
         self.tray_icon = QSystemTrayIcon(self)
         
-        # 设置图标（这里使用简单的文字图标，实际可以使用ICO文件）
-        # 创建一个简单的图标
-        pixmap = self._create_tray_icon_pixmap()
-        self.tray_icon.setIcon(QIcon(pixmap))
+        # 获取应用程序路径
+        if getattr(sys, 'frozen', False):
+            application_path = Path(sys._MEIPASS)
+        else:
+            application_path = Path(__file__).parent.parent
+        
+        # 尝试使用app.ico作为托盘图标
+        icon_path = application_path / "app.ico"
+        if icon_path.exists():
+            self.tray_icon.setIcon(QIcon(str(icon_path)))
+            logger.info(f"System tray icon set to: {icon_path}")
+        else:
+            # 回退到默认图标
+            logger.warning(f"app.ico not found at {icon_path}, using default icon")
+            pixmap = self._create_tray_icon_pixmap()
+            self.tray_icon.setIcon(QIcon(pixmap))
         
         # 创建托盘菜单
         self.tray_menu = QMenu()

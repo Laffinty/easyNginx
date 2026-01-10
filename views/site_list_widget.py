@@ -51,6 +51,8 @@ class SiteListWidget(QWidget):
         self.site_table.setAlternatingRowColors(True)
         self.site_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.site_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.site_table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 禁用编辑
+        self.site_table.setFocusPolicy(Qt.NoFocus)  # 去掉焦点框
         self.site_table.horizontalHeader().setStretchLastSection(True)
         self.site_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.site_table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -103,12 +105,18 @@ class SiteListWidget(QWidget):
             # 查找对应的 SiteListItem 对象
             site_item = next((item for item in self.site_items if item.site_name == site_name), None)
             
-            menu = QMenu()
+            # 创建菜单
+            menu = QMenu(self.site_table)  # 指定父部件为 site_table
             
+            # 添加编辑菜单项
             edit_action = QAction(self.main_viewmodel.language_manager.get("edit"), self)
             edit_action.triggered.connect(lambda: self._edit_site(site_name))
             menu.addAction(edit_action)
             
+            # 添加分隔符
+            menu.addSeparator()
+            
+            # 添加删除菜单项
             delete_action = QAction(self.main_viewmodel.language_manager.get("delete"), self)
             if site_item:
                 delete_action.triggered.connect(lambda: self._confirm_delete(site_item))
@@ -116,7 +124,8 @@ class SiteListWidget(QWidget):
                 delete_action.triggered.connect(lambda: self._confirm_delete_site_name(site_name))
             menu.addAction(delete_action)
             
-            menu.exec(self.site_table.mapToGlobal(position))
+            # 显示菜单
+            menu.exec(self.site_table.viewport().mapToGlobal(position))
     
     @Slot(list)
     def update_sites(self, site_items: list[SiteListItem]):

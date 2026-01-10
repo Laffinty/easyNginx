@@ -13,6 +13,7 @@ APP_VERSION = "v1.0"
 from typing import Optional
 from PySide6.QtWidgets import QApplication, QDialog
 from PySide6.QtCore import Qt, QDir
+from PySide6.QtGui import QIcon
 
 # 添加项目根目录到Python路径
 if getattr(sys, 'frozen', False):
@@ -282,6 +283,12 @@ def main():
         # app.setApplicationDisplayName("easyNginx")  # 注释掉避免标题重复
         app.setOrganizationName("easyNginx")
         app.setOrganizationDomain("easynginx.com")
+        
+        # 设置应用程序图标
+        icon_path = str(application_path / "app.ico")
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
+            logger.info(f"Application icon set: {icon_path}")
         
         # 设置应用属性
         QDir.setCurrent(str(application_path))
