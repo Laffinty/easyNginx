@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QDialog, QSystemTrayIcon, QMenu,
     QApplication
 )
-from PySide6.QtCore import Qt, QTimer, Slot, QSize
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QIcon, QAction, QPixmap, QPainter, QColor, QFont
 from loguru import logger
 from models.nginx_status import NginxStatus, SiteListItem

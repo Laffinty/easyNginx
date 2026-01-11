@@ -142,18 +142,6 @@ class ConfigManager:
         
         # 添加空行分隔
         return server_config + "\n\n"
-        # 生成标准的server配置
-        server_config = config_generator.generate_config(site)
-        
-        # 添加管理标记
-        marked_config = []
-        marked_config.append(self.MANAGED_START)
-        marked_config.append(f"{self.MANAGED_MARKER}: {site.site_name}")
-        marked_config.append(server_config)
-        marked_config.append(self.MANAGED_END)
-        marked_config.append("")  # 添加空行
-        
-        return "\n".join(marked_config)
     
     def ensure_default_server(self, content: str) -> str:
         """
