@@ -83,7 +83,9 @@ class MainViewModel(QObject):
         self.nginx_service = NginxService(nginx_path, config_path)
         self.config_generator = ConfigGenerator()
         self.config_parser = ConfigParser()
-        self.config_manager = ConfigManager(Path(config_path) if config_path else None, self.config_registry)
+        # 修复：正确处理config_path为None的情况
+        config_path_obj = Path(config_path) if config_path and config_path.strip() else None
+        self.config_manager = ConfigManager(config_path_obj, self.config_registry)
         self.language_manager = LanguageManager()
         
         # State management
@@ -206,8 +208,8 @@ class MainViewModel(QObject):
             # 发送所有站点到UI显示
             self.site_list_changed.emit(site_items)
             
-            # 发送操作完成信号
-            self.operation_completed.emit(True, f"从nginx.conf加载 {len(site_items)} 个站点")
+            # 程序运行已趋于正常，移除加载站点数量的弹框提示
+            # self.operation_completed.emit(True, f"从nginx.conf加载 {len(site_items)} 个站点")
             
         except Exception as e:
             logger.exception(f"Failed to load sites: {e}")

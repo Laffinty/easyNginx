@@ -40,13 +40,14 @@ dist/
 
 # Logs
 *.log
-!logs/.gitkeep
+# 保留 logs 目录结构，但忽略所有日志文件
 logs/*
-!logs/
+!logs/.gitkeep
 
 # Nginx runtime files
+# 保留 temp 目录结构，但忽略所有临时文件
 temp/*
-!temp/
+!temp/.gitkeep
 *.pid
 
 # IDE

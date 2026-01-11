@@ -159,10 +159,18 @@ class BaseSiteConfigDialog(QDialog):
         """加载站点（子类实现）."""
         pass
     
+    def _update_title_for_mode(self):
+        """根据模式（新建/编辑）更新标题."""
+        # 子类实现具体的标题更新逻辑
+        pass
+    
     def new_site(self):
         """新建站点."""
         self.original_site_name = ""
         self._clear_fields()
+        self._update_title_for_mode()
+        self._update_title_for_mode()
+        self._update_title_for_mode()
         
     def is_editing(self) -> bool:
         """是否在编辑模式."""
@@ -273,8 +281,8 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
     def __init__(self, main_viewmodel, parent=None, language_manager=None):
         """初始化静态站点对话框."""
         super().__init__(main_viewmodel, "", parent, language_manager)
-        # Set the title after initialization to use the language manager
-        self.setWindowTitle(self.language_manager.get("new_static"))
+        # 初始化时设置为新建标题
+        self._update_title_for_mode()
     
     def _setup_specific_form(self, layout):
         """设置静态站点特定表单."""
@@ -339,6 +347,16 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
         
         self.root_edit.setText(site_config.root_path)
         self.index_edit.setText(site_config.index_file)
+        
+        # 加载后更新标题为编辑模式
+        self._update_title_for_mode()
+    
+    def _update_title_for_mode(self):
+        """根据模式（新建/编辑）更新标题."""
+        if self.is_editing():
+            self.setWindowTitle(self.language_manager.get("edit_static"))
+        else:
+            self.setWindowTitle(self.language_manager.get("new_static"))
     
     def _browse_root(self):
         """浏览根目录."""
@@ -357,8 +375,8 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
     def __init__(self, main_viewmodel, parent=None, language_manager=None):
         """初始化PHP站点对话框."""
         super().__init__(main_viewmodel, "", parent, language_manager)
-        # Set the title after initialization to use the language manager
-        self.setWindowTitle(self.language_manager.get("new_php"))
+        # 初始化时设置为新建标题
+        self._update_title_for_mode()
     
     def _setup_specific_form(self, layout):
         """设置PHP站点特定表单."""
@@ -474,6 +492,16 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
             self.php_mode_combo.setCurrentIndex(1)
             self.php_host_edit.setText(site_config.php_fpm_host or "127.0.0.1")
             self.php_port_spin.setValue(site_config.php_fpm_port or 9000)
+        
+        # 加载后更新标题为编辑模式
+        self._update_title_for_mode()
+    
+    def _update_title_for_mode(self):
+        """根据模式（新建/编辑）更新标题."""
+        if self.is_editing():
+            self.setWindowTitle(self.language_manager.get("edit_php"))
+        else:
+            self.setWindowTitle(self.language_manager.get("new_php"))
     
     def _browse_root(self):
         """浏览根目录."""
@@ -492,8 +520,8 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
     def __init__(self, main_viewmodel, parent=None, language_manager=None):
         """初始化反向代理对话框."""
         super().__init__(main_viewmodel, "", parent, language_manager)
-        # Set the title after initialization to use the language manager
-        self.setWindowTitle(self.language_manager.get("new_proxy"))
+        # 初始化时设置为新建标题
+        self._update_title_for_mode()
     
     def _setup_specific_form(self, layout):
         """设置反向代理特定表单."""
@@ -559,3 +587,13 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
         self.proxy_url_edit.setText(site_config.proxy_pass_url)
         self.location_edit.setText(site_config.location_path)
         self.websocket_check.setChecked(site_config.enable_websocket)
+        
+        # 加载后更新标题为编辑模式
+        self._update_title_for_mode()
+    
+    def _update_title_for_mode(self):
+        """根据模式（新建/编辑）更新标题."""
+        if self.is_editing():
+            self.setWindowTitle(self.language_manager.get("edit_proxy"))
+        else:
+            self.setWindowTitle(self.language_manager.get("new_proxy"))
