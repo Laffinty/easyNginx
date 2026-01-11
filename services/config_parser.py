@@ -311,8 +311,8 @@ class ConfigParser:
                 "listen_port": self._parse_listen_port(directives.get("listen", "80")),
                 "server_name": self._parse_server_name(directives.get("server_name", "localhost")),
                 "enable_https": "ssl" in directives.get("listen", ""),
-                "ssl_cert_path": directives.get("ssl_certificate"),
-                "ssl_key_path": directives.get("ssl_certificate_key")
+                "ssl_cert_path": directives.get("ssl_certificate", "").strip('"\'') if directives.get("ssl_certificate") else None,
+                "ssl_key_path": directives.get("ssl_certificate_key", "").strip('"\'') if directives.get("ssl_certificate_key") else None
             }
             
             logger.debug(f"Base config: {base_config}")
@@ -329,6 +329,19 @@ class ConfigParser:
                 return None
             
             if config:
+                # 检查SSL文件是否存在（仅警告，不阻止加载）
+                if config.get("enable_https"):
+                    cert_path = config.get("ssl_cert_path")
+                    key_path = config.get("ssl_key_path")
+                    if cert_path:
+                        cert_file = Path(cert_path)
+                        if not cert_file.exists():
+                            logger.warning(f"SSL certificate file not found: {cert_path}")
+                    if key_path:
+                        key_file = Path(key_path)
+                        if not key_file.exists():
+                            logger.warning(f"SSL key file not found: {key_path}")
+                
                 site_config = SITE_CONFIG_TYPES[site_type](**config)
                 logger.info(f"[OK] Successfully parsed site: {config['site_name']} (type: {site_type})")
                 return site_config
