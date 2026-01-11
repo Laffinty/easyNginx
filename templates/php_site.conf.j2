@@ -4,7 +4,7 @@
 # HTTPS Security: {% if enable_https %}Enabled{% else %}Disabled{% endif %}
 
 server {
-    listen {{ listen_port }}{% if enable_https and https_security.http2_enabled %} http2{% endif %};
+    listen {{ listen_port }};
     server_name {{ server_name }};
     
     # ============================================
@@ -154,7 +154,12 @@ server {
     {% if enable_https %}
     
     # 监听443端口
-    listen 443 ssl{% if https_security.http2_enabled %} http2{% endif %};
+    listen 443 ssl;
+    
+    # HTTP/2 支持（Nginx 1.25.1+）
+    {% if https_security.http2_enabled %}
+    http2 on;
+    {% endif %}
     
     # SSL证书配置
     ssl_certificate "{{ ssl_cert_path }}";
