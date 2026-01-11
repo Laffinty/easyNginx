@@ -4,7 +4,9 @@
 # HTTPS Security: {% if enable_https %}Enabled{% else %}Disabled{% endif %}
 
 server {
+    {% if not enable_https or listen_port|string != '443' %}
     listen {{ listen_port }};
+    {% endif %}
     server_name {{ server_name }};
     
     # ============================================
