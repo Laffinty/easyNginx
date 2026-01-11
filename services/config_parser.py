@@ -26,10 +26,8 @@ class ConfigParser:
             r'(\w+)\s+(.+?)(?=\s*;|\s*\{)',
             re.MULTILINE | re.DOTALL
         )
-        self.location_pattern = re.compile(
-            r'location\s+([^\s{]+)\s*\{([^}]*)\}',
-            re.MULTILINE | re.DOTALL
-        )
+        # 注意：这个简单的正则表达式不能正确处理嵌套的大括号
+        # location解析现在使用手动方法，见 _extract_locations 方法
     
     def _extract_server_blocks(self, content: str) -> List[str]:
         """
@@ -79,6 +77,64 @@ class ConfigParser:
             pos = server_pos + 6
         
         return blocks
+    
+    def _extract_locations(self, server_block: str) -> List[Dict[str, str]]:
+        """
+        手动提取location块（处理嵌套大括号）
+        
+        Args:
+            server_block: server块内容
+            
+        Returns:
+            location块列表，每个元素包含path和body
+        """
+        locations = []
+        pos = 0
+        
+        while pos < len(server_block):
+            # 查找location关键字
+            loc_pos = server_block.find('location', pos)
+            if loc_pos == -1:
+                break
+            
+            # 确认是location块开始（后面是空格或{）
+            next_char_pos = loc_pos + 8
+            if next_char_pos < len(server_block):
+                next_char = server_block[next_char_pos]
+                if next_char.isspace() or next_char == '{':
+                    # 提取location路径
+                    path_start = loc_pos + 8
+                    path_end = server_block.find('{', path_start)
+                    if path_end != -1:
+                        location_path = server_block[path_start:path_end].strip()
+                        
+                        # 找到location块开始
+                        bracket_pos = path_end
+                        depth = 1
+                        search_pos = bracket_pos + 1
+                        
+                        # 查找匹配的结束括号
+                        while search_pos < len(server_block) and depth > 0:
+                            if server_block[search_pos] == '{':
+                                depth += 1
+                            elif server_block[search_pos] == '}':
+                                depth -= 1
+                            search_pos += 1
+                        
+                        if depth == 0:
+                            # 提取完整的location块
+                            location_body = server_block[bracket_pos+1:search_pos-1]
+                            locations.append({
+                                "path": location_path,
+                                "body": location_body
+                            })
+                            pos = search_pos
+                            continue
+            
+            # 如果没找到，继续搜索下一个位置
+            pos = loc_pos + 8
+        
+        return locations
     
     def parse_config_file(self, config_path: Path, config_registry=None) -> List[SiteConfigBase]:
         """
@@ -217,15 +273,15 @@ class ConfigParser:
             
             # 先提取location块（从server块中移除它们，避免干扰指令提取）
             server_block_for_directives = server_block_clean
-            locations = []
-            for match in self.location_pattern.finditer(server_block_clean):
-                location_path = match.group(1)
-                location_body = match.group(2)
-                locations.append({"path": location_path, "body": location_body})
-                # 从server块中移除location块，避免干扰其他指令的提取
-                server_block_for_directives = server_block_for_directives.replace(match.group(0), '')
+            locations = self._extract_locations(server_block_clean)
             
             logger.debug(f"Extracted {len(locations)} location blocks")
+            
+            # 从server块中移除location块，避免干扰其他指令的提取
+            for loc in locations:
+                # 重建完整的location块文本以进行替换
+                loc_text = f"location {loc['path']} {{{loc['body']}}}"
+                server_block_for_directives = server_block_for_directives.replace(loc_text, '')
             
             # 提取所有指令（跳过server指令本身）
             directives = {}
@@ -354,6 +410,39 @@ class ConfigParser:
                     if fastcgi_pass.startswith("/"):  # Unix socket
                         config["php_fpm_mode"] = "unix"
                         config["php_fpm_socket"] = fastcgi_pass.strip('"\'')
+                    elif fastcgi_pass.startswith("$") or ":" not in fastcgi_pass:
+                        # 是变量（如$php_fpm）或格式不正确，尝试从set指令解析
+                        # 查找server块中的set指令
+                        set_php_fpm = directives.get("set", "")
+                        if '$php_fpm' in set_php_fpm and '"' in set_php_fpm:
+                            # 提取变量值
+                            import re
+                            var_match = re.search(r'\$php_fpm\s+"([^"]+)"', set_php_fpm)
+                            if var_match:
+                                actual_value = var_match.group(1)
+                                if actual_value.startswith("/"):  # Unix socket
+                                    config["php_fpm_mode"] = "unix"
+                                    config["php_fpm_socket"] = actual_value
+                                else:  # TCP
+                                    config["php_fpm_mode"] = "tcp"
+                                    if ":" in actual_value:
+                                        host, port = actual_value.split(":")
+                                        config["php_fpm_host"] = host
+                                        config["php_fpm_port"] = int(port)
+                                    else:
+                                        # 默认值
+                                        config["php_fpm_host"] = "127.0.0.1"
+                                        config["php_fpm_port"] = 9000
+                            else:
+                                # 无法解析变量，使用默认值
+                                config["php_fpm_mode"] = "tcp"
+                                config["php_fpm_host"] = "127.0.0.1"
+                                config["php_fpm_port"] = 9000
+                        else:
+                            # 无法解析，使用默认值
+                            config["php_fpm_mode"] = "tcp"
+                            config["php_fpm_host"] = "127.0.0.1"
+                            config["php_fpm_port"] = 9000
                     else:  # TCP
                         config["php_fpm_mode"] = "tcp"
                         host, port = fastcgi_pass.split(":")

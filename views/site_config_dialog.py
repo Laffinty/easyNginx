@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Slot
 from loguru import logger
 from models.site_config import SiteConfigBase, StaticSiteConfig, PHPSiteConfig, ProxySiteConfig
 from utils.language_manager import LanguageManager
+import platform
 
 
 class BaseSiteConfigDialog(QDialog):
@@ -384,37 +385,63 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         php_layout = QVBoxLayout()
         php_layout.setSpacing(8)
         
-        # PHP-FPM连接方式
-        mode_layout = QHBoxLayout()
-        self.php_mode_combo = QComboBox()
-        self.php_mode_combo.addItems([self.language_manager.get("unix_socket"), self.language_manager.get("tcp")])
-        self.php_mode_combo.currentIndexChanged.connect(self._on_php_mode_changed)
-        mode_layout.addWidget(self.php_mode_combo)
-        mode_layout.addStretch()
-        php_layout.addLayout(mode_layout)
+        # 检查是否为Windows系统
+        is_windows = platform.system() == "Windows"
         
-        # Socket配置
-        socket_layout = QHBoxLayout()
-        self.php_socket_edit = QLineEdit("/run/php/php-fpm.sock")
-        socket_layout.addWidget(self.php_socket_edit)
-        php_layout.addLayout(socket_layout)
-        
-        # TCP配置（初始隐藏）
-        tcp_widget = QWidget()
-        tcp_layout = QHBoxLayout(tcp_widget)
-        tcp_layout.setContentsMargins(0, 0, 0, 0)
-        
-        self.php_host_edit = QLineEdit("127.0.0.1")
-        tcp_layout.addWidget(QLabel(self.language_manager.get("php_host")))
-        tcp_layout.addWidget(self.php_host_edit)
-        
-        self.php_port_spin = QSpinBox()
-        self.php_port_spin.setRange(1, 65535)
-        self.php_port_spin.setValue(9000)
-        tcp_layout.addWidget(QLabel(self.language_manager.get("php_port")))
-        tcp_layout.addWidget(self.php_port_spin)
-        
-        php_layout.addWidget(tcp_widget)
+        if is_windows:
+            # Windows系统：只显示TCP/IP选项，隐藏Unix socket相关UI
+            self.php_fpm_mode = "tcp"  # 强制使用TCP模式
+            
+            # 只显示主机和端口配置
+            tcp_widget = QWidget()
+            tcp_layout = QHBoxLayout(tcp_widget)
+            tcp_layout.setContentsMargins(0, 0, 0, 0)
+            
+            self.php_host_edit = QLineEdit("127.0.0.1")
+            tcp_layout.addWidget(QLabel(self.language_manager.get("php_host")))
+            tcp_layout.addWidget(self.php_host_edit)
+            
+            self.php_port_spin = QSpinBox()
+            self.php_port_spin.setRange(1, 65535)
+            self.php_port_spin.setValue(9000)
+            tcp_layout.addWidget(QLabel(self.language_manager.get("php_port")))
+            tcp_layout.addWidget(self.php_port_spin)
+            
+            php_layout.addWidget(tcp_widget)
+        else:
+            # Unix-like系统：显示完整的选项
+            # PHP-FPM连接方式
+            mode_layout = QHBoxLayout()
+            self.php_mode_combo = QComboBox()
+            self.php_mode_combo.addItems([self.language_manager.get("unix_socket"), self.language_manager.get("tcp")])
+            self.php_mode_combo.currentIndexChanged.connect(self._on_php_mode_changed)
+            mode_layout.addWidget(self.php_mode_combo)
+            mode_layout.addStretch()
+            php_layout.addLayout(mode_layout)
+            
+            # Socket配置
+            socket_layout = QHBoxLayout()
+            self.php_socket_edit = QLineEdit("/run/php/php-fpm.sock")
+            socket_layout.addWidget(self.php_socket_edit)
+            php_layout.addLayout(socket_layout)
+            
+            # TCP配置（初始隐藏）
+            tcp_widget = QWidget()
+            tcp_layout = QHBoxLayout(tcp_widget)
+            tcp_layout.setContentsMargins(0, 0, 0, 0)
+            
+            self.php_host_edit = QLineEdit("127.0.0.1")
+            tcp_layout.addWidget(QLabel(self.language_manager.get("php_host")))
+            tcp_layout.addWidget(self.php_host_edit)
+            
+            self.php_port_spin = QSpinBox()
+            self.php_port_spin.setRange(1, 65535)
+            self.php_port_spin.setValue(9000)
+            tcp_layout.addWidget(QLabel(self.language_manager.get("php_port")))
+            tcp_layout.addWidget(self.php_port_spin)
+            
+            tcp_widget.setVisible(False)  # 初始隐藏TCP配置
+            php_layout.addWidget(tcp_widget)
         
         php_group.setLayout(php_layout)
         layout.addWidget(php_group)
@@ -436,6 +463,10 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
     
     def _on_php_mode_changed(self, index):
         """PHP模式改变."""
+        # 在Windows上无需切换，因为没有Unix socket选项
+        if platform.system() == "Windows":
+            return
+        
         is_unix = index == 0
         self.php_socket_edit.setEnabled(is_unix)
         self.php_host_edit.setEnabled(not is_unix)
@@ -444,7 +475,9 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
     def get_config(self) -> PHPSiteConfig:
         """获取PHP站点配置."""
         try:
-            is_unix = self.php_mode_combo.currentIndex() == 0
+            # 在Windows上强制使用TCP模式
+            is_windows = platform.system() == "Windows"
+            is_unix = not is_windows and (self.php_mode_combo.currentIndex() == 0)
             
             # 获取站点名称，如果为空则自动生成唯一名称
             site_name = self.site_name_edit.text().strip()
@@ -461,9 +494,9 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
                 ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
                 root_path=self.root_edit.text(),
                 php_fpm_mode="unix" if is_unix else "tcp",
-                php_fpm_socket=self.php_socket_edit.text() if is_unix else None,
-                php_fpm_host=self.php_host_edit.text() if not is_unix else None,
-                php_fpm_port=self.php_port_spin.value() if not is_unix else None
+                php_fpm_socket=self.php_socket_edit.text() if is_unix and not is_windows else None,
+                php_fpm_host=self.php_host_edit.text() if (not is_unix or is_windows) else None,
+                php_fpm_port=self.php_port_spin.value() if (not is_unix or is_windows) else None
             )
         except Exception as e:
             logger.error(f"Failed to create PHP config: {e}")
@@ -485,11 +518,19 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         self.root_edit.setText(site_config.root_path)
         
         # PHP配置
-        if site_config.php_fpm_mode == "unix":
-            self.php_mode_combo.setCurrentIndex(0)
-            self.php_socket_edit.setText(site_config.php_fpm_socket or "/run/php/php-fpm.sock")
+        is_windows = platform.system() == "Windows"
+        
+        if not is_windows:
+            # Unix-like系统：根据配置设置模式
+            if site_config.php_fpm_mode == "unix":
+                self.php_mode_combo.setCurrentIndex(0)
+                self.php_socket_edit.setText(site_config.php_fpm_socket or "/run/php/php-fpm.sock")
+            else:
+                self.php_mode_combo.setCurrentIndex(1)
+                self.php_host_edit.setText(site_config.php_fpm_host or "127.0.0.1")
+                self.php_port_spin.setValue(site_config.php_fpm_port or 9000)
         else:
-            self.php_mode_combo.setCurrentIndex(1)
+            # Windows系统：只加载TCP配置
             self.php_host_edit.setText(site_config.php_fpm_host or "127.0.0.1")
             self.php_port_spin.setValue(site_config.php_fpm_port or 9000)
         

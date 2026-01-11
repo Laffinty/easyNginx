@@ -108,6 +108,10 @@ class LanguageManager(QObject):
             "operation_success": "Operation Success",
             "operation_failed": "Operation Failed",
             
+            "takeover_completed": "Takeover Completed",
+            "takeover_restart_message": "Nginx directory has been taken over and configuration updated",
+            "please_restart_application": "Please restart the application",
+            
             "static_site_config": "Static Site Configuration",
             "php_site_config": "PHP Site Configuration",
             "proxy_site_config": "Reverse Proxy Configuration",
@@ -225,6 +229,10 @@ class LanguageManager(QObject):
                 
                 "operation_success": "操作成功",
                 "operation_failed": "操作失败",
+                
+                "takeover_completed": "接管完成",
+                "takeover_restart_message": "Nginx目录已接管，配置已更新",
+                "please_restart_application": "请重新启动应用程序",
                 
                 "save_apply": "保存并应用",
                 "cancel": "取消",

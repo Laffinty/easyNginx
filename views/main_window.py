@@ -190,14 +190,14 @@ class MainWindow(QMainWindow):
     def _on_operation_completed(self, success, message):
         """操作完成."""
         if success:
-            QMessageBox.information(self, "操作成功", message)
+            QMessageBox.information(self, self.language_manager.get("operation_success"), message)
         else:
-            QMessageBox.warning(self, "操作失败", message)
+            QMessageBox.warning(self, self.language_manager.get("operation_failed"), message)
     
     @Slot(str)
     def _on_error_occurred(self, error):
         """错误发生."""
-        QMessageBox.critical(self, "错误", error)
+        QMessageBox.critical(self, self.language_manager.get("error"), error)
         logger.error(f"UI error: {error}")
     
     @Slot(str)
@@ -253,18 +253,10 @@ class MainWindow(QMainWindow):
             if config:
                 self.main_viewmodel.add_site(config)
     
-    @Slot(SiteListItem)
+    @Slot(str)
     def _on_delete_site(self, site_name: str):
-        """删除站点 - 所有站点都可以删除."""
-        reply = QMessageBox.question(
-            self,
-            "确认删除",
-            f"确定要删除站点 '{site_name}' 吗？",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            self.main_viewmodel.delete_site(site_name)
+        """删除站点 - 直接调用ViewModel删除（确认已在site_list_widget中完成）"""
+        self.main_viewmodel.delete_site(site_name)
     
 
     
@@ -337,7 +329,12 @@ class MainWindow(QMainWindow):
                 
                 # 更新ViewModel
                 self.main_viewmodel.update_nginx_path(nginx_path, config_path)
-                QMessageBox.information(self, "接管完成", "Nginx目录已接管，配置已更新，请重新启动应用")
+                QMessageBox.information(
+                    self,
+                    self.language_manager.get("takeover_completed"), 
+                    self.language_manager.get("takeover_restart_message") + "\n\n" + 
+                    self.language_manager.get("please_restart_application")
+                )
     
     def _retranslate_ui(self):
         """Dynamically update all UI text when language changes."""
