@@ -342,6 +342,17 @@ def main():
             # 静默启动 - 只显示系统托盘图标，不显示主窗口
             logger.info("Silent mode enabled - Starting in system tray only")
             main_window.hide()
+            
+            # 开机自启时自动启动Nginx
+            if not main_viewmodel.nginx_service.is_nginx_running():
+                logger.info("Auto-starting Nginx on boot...")
+                success, message = main_viewmodel.nginx_service.start_nginx()
+                if success:
+                    logger.info("Nginx started automatically on boot")
+                else:
+                    logger.warning(f"Failed to auto-start Nginx: {message}")
+            else:
+                logger.info("Nginx is already running")
         else:
             # 正常启动 - 显示主窗口
             logger.info("Normal mode - Showing main window")
