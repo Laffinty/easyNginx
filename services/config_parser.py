@@ -299,6 +299,12 @@ class ConfigParser:
             
             # Location blocks were already extracted above
             
+            # 检查是否是80端口重定向server块（应该跳过，不解析为独立站点）
+            # 重定向server块的特征是：包含return 301/302到https，且没有实际内容
+            if self._is_redirect_server_block(directives, locations):
+                logger.debug("Skipping redirect server block (not a real site)")
+                return None
+            
             # 检测站点类型
             site_type = self._detect_site_type(directives, locations)
             logger.debug(f"Detected site type: {site_type}")
@@ -314,6 +320,9 @@ class ConfigParser:
                 "ssl_cert_path": directives.get("ssl_certificate", "").strip('"\'') if directives.get("ssl_certificate") else None,
                 "ssl_key_path": directives.get("ssl_certificate_key", "").strip('"\'') if directives.get("ssl_certificate_key") else None
             }
+            
+            # 检查是否启用了80端口重定向（从注释中读取）
+            base_config["enable_http_redirect"] = self._check_http_redirect_enabled(server_block)
             
             logger.debug(f"Base config: {base_config}")
             
@@ -501,6 +510,81 @@ class ConfigParser:
         config["enable_websocket"] = enable_websocket
         
         return config
+    
+    def _is_redirect_server_block(self, directives: Dict[str, str], locations: List[Dict]) -> bool:
+        """
+        检测server块是否是HTTP到HTTPS的重定向块
+        
+        重定向块的特征：
+        1. 包含 return 301/302 https://...
+        2. 没有location块（或者location块也只是重定向）
+        3. 没有root、proxy_pass等实际内容
+        
+        Args:
+            directives: server块中的指令
+            locations: location块列表
+            
+        Returns:
+            是否是重定向server块
+        """
+        try:
+            # 检查是否有return指令
+            has_return = False
+            for key, value in directives.items():
+                if key == 'return' and ('https://' in value or '301' in value or '302' in value):
+                    has_return = True
+                    break
+            
+            # 如果没有return指令，不是重定向块
+            if not has_return:
+                return False
+            
+            # 检查是否有实际内容（root、proxy_pass等）
+            has_content = False
+            for key in directives.keys():
+                if key in ['root', 'proxy_pass', 'fastcgi_pass']:
+                    has_content = True
+                    break
+            
+            # 如果有实际内容，不是重定向块
+            if has_content:
+                return False
+            
+            # 检查location块是否有实际内容
+            for loc in locations:
+                loc_body = loc.get('body', '')
+                if any(keyword in loc_body for keyword in ['root', 'proxy_pass', 'fastcgi_pass']):
+                    return False
+            
+            # 如果只有return指令且没有实际内容，认为是重定向块
+            return True
+            
+        except Exception as e:
+            logger.debug(f"Error checking redirect server block: {e}")
+            return False
+    
+    def _check_http_redirect_enabled(self, server_block: str) -> bool:
+        """
+        检查server块是否启用了80端口重定向（从注释中读取）
+        
+        Args:
+            server_block: server块完整内容
+            
+        Returns:
+            是否启用了80端口重定向
+        """
+        try:
+            # 查找 easyNginx 注释中的 "启用80端口重定向" 标记
+            # 支持中文和英文
+            for line in server_block.split('\n'):
+                if '启用80端口重定向' in line and '是' in line:
+                    return True
+                if 'Enable 80 port redirect' in line and 'Yes' in line:
+                    return True
+            return False
+        except Exception as e:
+            logger.debug(f"Error checking http redirect flag from comments: {e}")
+            return False
     
     def _generate_site_name(self, directives: Dict[str, str]) -> str:
         """生成站点名称."""
