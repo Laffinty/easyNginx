@@ -155,8 +155,8 @@ server {
     # ============================================
     {% if enable_https %}
     
-    # 监听443端口
-    listen 443 ssl;
+    # 监听端口（SSL）
+    listen {{ listen_port }} ssl;
     
     # HTTP/2 支持（Nginx 1.25.1+）
     {% if https_security.http2_enabled %}

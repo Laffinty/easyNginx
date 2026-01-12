@@ -131,8 +131,8 @@ server {
     # ============================================
     {% if enable_https %}
     
-    # 监听443端口
-    listen 443 ssl;
+    # 监听端口（SSL）
+    listen {{ listen_port }} ssl;
     
     # SSL证书配置
     ssl_certificate "{{ ssl_cert_path }}";

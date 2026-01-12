@@ -97,8 +97,8 @@ server {
     # ============================================
     {% if enable_https %}
     
-    # 监听443端口
-    listen 443 ssl;
+    # 监听端口（SSL）
+    listen {{ listen_port }} ssl;
     
     # HTTP/2 支持（Nginx 1.25.1+）
     {% if https_security.http2_enabled %}
@@ -139,8 +139,8 @@ server {
         add_header X-XSS-Protection "1; mode=block" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         
-        {% if https_security.https_security_headers.Content-Security-Policy %}
-        add_header Content-Security-Policy "{{ https_security.https_security_headers.Content-Security-Policy }}" always;
+        {% if https_security.https_security_headers['Content-Security-Policy'] %}
+        add_header Content-Security-Policy "{{ https_security.https_security_headers['Content-Security-Policy'] }}" always;
         {% endif %}
     }
     {% endif %}
