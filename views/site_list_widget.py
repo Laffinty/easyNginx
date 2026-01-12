@@ -180,7 +180,7 @@ class SiteListWidget(QWidget):
             port_item = QStandardItem()
             if item.enable_https and item.enable_http_redirect:
                 # 显示HTTPS端口和80重定向（格式：443/80(重定向)）
-                redirect_text = self.main_viewmodel.language_manager.get("http_redirect_suffix", "重定向")
+                redirect_text = self.main_viewmodel.language_manager.get("redirect")
                 port_display = f"{item.listen_port}/80({redirect_text})"
                 port_item.setText(port_display)
             else:
