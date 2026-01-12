@@ -95,6 +95,9 @@ class SiteListWidget(QWidget):
             "HTTPS"
         ]
         self.model.setHorizontalHeaderLabels(headers)
+        
+        # 刷新表格内容以更新语言相关的文本（如yes/no）
+        self._refresh_table()
     
     def _show_context_menu(self, position):
         """Show context menu."""
@@ -175,7 +178,13 @@ class SiteListWidget(QWidget):
             
             # Port
             port_item = QStandardItem()
-            port_item.setText(str(item.listen_port))
+            if item.enable_https and item.enable_http_redirect:
+                # 显示HTTPS端口和80重定向（格式：443/80(重定向)）
+                redirect_text = self.main_viewmodel.language_manager.get("http_redirect_suffix", "重定向")
+                port_display = f"{item.listen_port}/80({redirect_text})"
+                port_item.setText(port_display)
+            else:
+                port_item.setText(str(item.listen_port))
             port_item.setTextAlignment(Qt.AlignCenter)
             row.append(port_item)
             

@@ -3,6 +3,17 @@
 # Performance Baseline: Applied (F5/CIS Best Practices)
 # HTTPS Security: {% if enable_https %}Enabled{% else %}Disabled{% endif %}
 
+{% if enable_https and enable_http_redirect %}
+# HTTP重定向到HTTPS
+server {
+    listen 80;
+    server_name {{ server_name }};
+    
+    # 重定向所有HTTP请求到HTTPS
+    return 301 https://$host$request_uri;
+}
+
+{% endif %}
 server {
     {% if not enable_https %}
     listen {{ listen_port }};

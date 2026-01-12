@@ -113,6 +113,12 @@ class BaseSiteConfigDialog(QDialog):
         https_switch_layout.addStretch()
         https_layout.addLayout(https_switch_layout)
         
+        # 80端口重定向到HTTPS
+        self.http_redirect_check = QCheckBox(self.language_manager.get("enable_http_redirect"))
+        self.http_redirect_check.setToolTip(self.language_manager.get("http_redirect_tooltip"))
+        self.http_redirect_check.setEnabled(False)  # 默认禁用，只有在启用HTTPS时才可用
+        https_layout.addWidget(self.http_redirect_check)
+        
         # SSL证书路径
         cert_layout = QHBoxLayout()
         self.ssl_cert_edit = QLineEdit()
@@ -190,12 +196,15 @@ class BaseSiteConfigDialog(QDialog):
         self.ssl_key_edit.setEnabled(enabled)
         self.cert_browse_btn.setEnabled(enabled)
         self.key_browse_btn.setEnabled(enabled)
+        self.http_redirect_check.setEnabled(enabled)
         
         # 根据HTTPS状态自动设置监听端口
         if enabled:
             self.port_spin.setValue(443)
         else:
             self.port_spin.setValue(80)
+            # 禁用HTTPS时，取消80端口重定向
+            self.http_redirect_check.setChecked(False)
         
     def _browse_cert(self):
         """浏览证书."""
@@ -324,6 +333,7 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
                 listen_port=self.port_spin.value(),
                 server_name=self.server_name_edit.text(),
                 enable_https=self.https_check.isChecked(),
+                enable_http_redirect=self.http_redirect_check.isChecked(),
                 ssl_cert_path=self.ssl_cert_edit.text() if self.https_check.isChecked() else None,
                 ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
                 root_path=self.root_edit.text(),
@@ -341,6 +351,7 @@ class StaticSiteConfigDialog(BaseSiteConfigDialog):
         self.port_spin.setValue(site_config.listen_port)
         self.server_name_edit.setText(site_config.server_name)
         self.https_check.setChecked(site_config.enable_https)
+        self.http_redirect_check.setChecked(site_config.enable_http_redirect)
         
         if site_config.enable_https:
             self.ssl_cert_edit.setText(site_config.ssl_cert_path or "")
@@ -490,6 +501,7 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
                 listen_port=self.port_spin.value(),
                 server_name=self.server_name_edit.text(),
                 enable_https=self.https_check.isChecked(),
+                enable_http_redirect=self.http_redirect_check.isChecked(),
                 ssl_cert_path=self.ssl_cert_edit.text() if self.https_check.isChecked() else None,
                 ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
                 root_path=self.root_edit.text(),
@@ -510,6 +522,7 @@ class PHPSiteConfigDialog(BaseSiteConfigDialog):
         self.port_spin.setValue(site_config.listen_port)
         self.server_name_edit.setText(site_config.server_name)
         self.https_check.setChecked(site_config.enable_https)
+        self.http_redirect_check.setChecked(site_config.enable_http_redirect)
         
         if site_config.enable_https:
             self.ssl_cert_edit.setText(site_config.ssl_cert_path or "")
@@ -602,6 +615,7 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
                 listen_port=self.port_spin.value(),
                 server_name=self.server_name_edit.text(),
                 enable_https=self.https_check.isChecked(),
+                enable_http_redirect=self.http_redirect_check.isChecked(),
                 ssl_cert_path=self.ssl_cert_edit.text() if self.https_check.isChecked() else None,
                 ssl_key_path=self.ssl_key_edit.text() if self.https_check.isChecked() else None,
                 proxy_pass_url=self.proxy_url_edit.text(),
@@ -620,6 +634,7 @@ class ProxySiteConfigDialog(BaseSiteConfigDialog):
         self.port_spin.setValue(site_config.listen_port)
         self.server_name_edit.setText(site_config.server_name)
         self.https_check.setChecked(site_config.enable_https)
+        self.http_redirect_check.setChecked(site_config.enable_http_redirect)
         
         if site_config.enable_https:
             self.ssl_cert_edit.setText(site_config.ssl_cert_path or "")

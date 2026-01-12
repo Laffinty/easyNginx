@@ -222,7 +222,11 @@ class ConfigManager:
             if backup_path:
                 logger.info(f"Main config backup created: {backup_path}")
             
-            # 2. 确保主配置包含正确的include语句
+            # 2. 检查并更新server_names_hash_bucket_size
+            # 根据所有站点的server_name自动计算所需的大小
+            self._ensure_server_names_hash_bucket_size(config_path, sites)
+            
+            # 3. 确保主配置包含正确的include语句
             # 注意：现在使用随机数命名的目录，include指令已由接管时生成
             # self._ensure_include_directive(config_path)
             
@@ -509,6 +513,129 @@ http {
                 
         except Exception as e:
             logger.exception(f"Failed to ensure include directive: {e}")
+    
+    def _ensure_server_names_hash_bucket_size(self, config_path: Path, sites: List[SiteConfigBase]):
+        """
+        确保nginx.conf中包含适当的server_names_hash_bucket_size设置
+        根据所有站点中最长的server_name自动计算所需大小
+        
+        Args:
+            config_path: Nginx主配置文件路径
+            sites: 站点配置列表
+        """
+        try:
+            if not config_path.exists():
+                logger.error(f"Config file not found: {config_path}")
+                return
+            
+            # 读取配置内容
+            content = read_file_robust(config_path)
+            if content is None:
+                logger.error(f"无法读取配置文件: {config_path}")
+                return
+            
+            # 计算所需的最小bucket_size
+            required_size = self._calculate_server_names_hash_bucket_size(sites)
+            logger.info(f"Calculated required server_names_hash_bucket_size: {required_size}")
+            
+            # 检查是否已存在该设置
+            pattern = re.compile(r'server_names_hash_bucket_size\s+(\d+)\s*;', re.MULTILINE)
+            match = pattern.search(content)
+            
+            if match:
+                # 已存在设置，检查是否需要增大
+                current_size = int(match.group(1))
+                if current_size >= required_size:
+                    logger.info(f"Current server_names_hash_bucket_size ({current_size}) is sufficient")
+                    return
+                else:
+                    logger.info(f"Increasing server_names_hash_bucket_size from {current_size} to {required_size}")
+                    # 替换现有设置
+                    content = pattern.sub(f'server_names_hash_bucket_size {required_size};', content)
+            else:
+                # 不存在设置，需要添加
+                logger.info(f"Adding server_names_hash_bucket_size {required_size} to config")
+                
+                # 在http块中添加该设置
+                http_pattern = re.compile(r'(http\s*{[^}]*(?:{[^}]*}[^}]*)*)', re.MULTILINE | re.DOTALL)
+                http_match = http_pattern.search(content)
+                
+                if http_match:
+                    # 在http块的{后面插入设置
+                    http_start = http_match.start()
+                    insert_pos = content.find('{', http_start) + 1
+                    
+                    # 找到插入位置的行尾
+                    line_end = content.find('\n', insert_pos)
+                    if line_end != -1:
+                        # 在新行插入设置
+                        new_line = f"\n    server_names_hash_bucket_size {required_size};"
+                        content = content[:line_end] + new_line + content[line_end:]
+                else:
+                    # 没有找到http块，创建包含该设置的http块
+                    logger.warning("No http block found, creating one with server_names_hash_bucket_size")
+                    additional_config = f"""
+http {{
+    server_names_hash_bucket_size {required_size};
+    include mime.types;
+    default_type application/octet-stream;
+}}
+"""
+                    content += additional_config
+            
+            # 创建备份
+            backup_path = self.backup_config(config_path)
+            if backup_path:
+                logger.info(f"Backup created before updating hash bucket size: {backup_path}")
+            
+            # 写入更新后的配置
+            config_path.write_text(content, encoding="utf-8")
+            logger.info(f"Updated server_names_hash_bucket_size to {required_size}")
+            
+        except Exception as e:
+            logger.exception(f"Failed to ensure server_names_hash_bucket_size: {e}")
+    
+    def _calculate_server_names_hash_bucket_size(self, sites: List[SiteConfigBase]) -> int:
+        """
+        计算所需的server_names_hash_bucket_size
+        
+        基于所有站点中最长的server_name + 一些缓冲区
+        Nginx要求该值是2的幂次，且不小于32
+        
+        Args:
+            sites: 站点配置列表
+            
+        Returns:
+            所需的bucket大小（32, 64, 128, 256等）
+        """
+        if not sites:
+            return 64  # 默认值
+        
+        # 找到最长的server_name
+        max_length = 0
+        for site in sites:
+            if site.server_name:
+                # server_name可能包含多个域名，用空格分隔
+                names = site.server_name.split()
+                for name in names:
+                    max_length = max(max_length, len(name))
+        
+        # 如果没有server_name，使用默认值
+        if max_length == 0:
+            return 64
+        
+        # 计算所需大小（最长server_name + 32字节缓冲区）
+        # Nginx内部会使用一些额外字节
+        required = max_length + 32
+        
+        # 确保是2的幂次，且不小于32
+        bucket_sizes = [32, 64, 128, 256, 512]
+        for size in bucket_sizes:
+            if size >= required:
+                return size
+        
+        # 如果还不足够，返回更大的值
+        return 512
     
     def delete_site_config(self, site_name: str, config_path: Optional[Path] = None) -> bool:
         """

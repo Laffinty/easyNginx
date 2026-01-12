@@ -269,6 +269,12 @@ def check_and_handle_nginx_takeover(config_registry: ConfigRegistry, language_ma
 
 def main():
     """主函数."""
+    # 处理命令行参数
+    import argparse
+    parser = argparse.ArgumentParser(description="easyNginx - Professional Nginx Management Tool")
+    parser.add_argument("--silent", action="store_true", help="静默启动（仅显示系统托盘图标）")
+    args = parser.parse_args()
+    
     # 设置异常处理
     setup_exception_handler()
     
@@ -331,8 +337,15 @@ def main():
         else:
             logger.info("Configuration sync completed: No managed sites found in nginx.conf")
         
-        # 显示主窗口（此时站点列表已加载并显示）
-        main_window.show()
+        # 根据命令行参数决定是否静默启动
+        if args.silent:
+            # 静默启动 - 只显示系统托盘图标，不显示主窗口
+            logger.info("Silent mode enabled - Starting in system tray only")
+            main_window.hide()
+        else:
+            # 正常启动 - 显示主窗口
+            logger.info("Normal mode - Showing main window")
+            main_window.show()
         
         logger.info("Application started successfully")
         

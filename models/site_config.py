@@ -17,6 +17,7 @@ class SiteConfigBase(BaseModel, ABC):
     
     # HTTPS配置
     enable_https: bool = Field(default=False, description="启用HTTPS")
+    enable_http_redirect: bool = Field(default=False, description="80端口重定向到HTTPS")
     ssl_cert_path: Optional[str] = Field(default=None, description="SSL证书路径")
     ssl_key_path: Optional[str] = Field(default=None, description="SSL私钥路径")
     
@@ -152,6 +153,7 @@ class StaticSiteConfig(SiteConfigBase):
             "listen_port": self.listen_port,
             "server_name": self.server_name,
             "enable_https": self.enable_https,
+            "enable_http_redirect": self.enable_http_redirect,
             "ssl_cert_path": self.ssl_cert_path,
             "ssl_key_path": self.ssl_key_path,
             "root_path": self.root_path,
@@ -205,6 +207,7 @@ class PHPSiteConfig(SiteConfigBase):
             "listen_port": self.listen_port,
             "server_name": self.server_name,
             "enable_https": self.enable_https,
+            "enable_http_redirect": self.enable_http_redirect,
             "ssl_cert_path": self.ssl_cert_path,
             "ssl_key_path": self.ssl_key_path,
             "root_path": self.root_path,
@@ -247,6 +250,7 @@ class ProxySiteConfig(SiteConfigBase):
             "listen_port": self.listen_port,
             "server_name": self.server_name,
             "enable_https": self.enable_https,
+            "enable_http_redirect": self.enable_http_redirect,
             "ssl_cert_path": self.ssl_cert_path,
             "ssl_key_path": self.ssl_key_path,
             "proxy_pass_url": self.proxy_pass_url,

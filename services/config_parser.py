@@ -584,6 +584,7 @@ class ConfigParser:
                 listen_port=site.listen_port,
                 server_name=site.server_name,
                 enable_https=site.enable_https,
+                enable_http_redirect=getattr(site, 'enable_http_redirect', False),
                 status="configured",
                 is_managed=True  # 所有站点都被视为可管理
             )

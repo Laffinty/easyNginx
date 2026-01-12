@@ -98,6 +98,12 @@ class MainWindow(QMainWindow):
         nginx_action = file_menu.addAction(self.language_manager.get("takeover_nginx"))
         nginx_action.triggered.connect(self._on_set_nginx_path)
         
+        # Startup on boot
+        self.startup_action = file_menu.addAction(self.language_manager.get("startup_on_boot"))
+        self.startup_action.setCheckable(True)
+        self.startup_action.setChecked(self._is_startup_enabled())
+        self.startup_action.triggered.connect(self._on_toggle_startup)
+        
         file_menu.addSeparator()
         
         # New site actions
@@ -478,6 +484,79 @@ class MainWindow(QMainWindow):
             self.main_viewmodel.refresh_sites()
         finally:
             QApplication.restoreOverrideCursor()
+    
+    def _is_startup_enabled(self) -> bool:
+        """检查开机启动是否已启用."""
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_READ
+            )
+            try:
+                value, _ = winreg.QueryValueEx(key, "easyNginx")
+                winreg.CloseKey(key)
+                return True
+            except WindowsError:
+                winreg.CloseKey(key)
+                return False
+        except Exception as e:
+            logger.error(f"Failed to check startup status: {e}")
+            return False
+    
+    def _enable_startup(self):
+        """启用开机启动."""
+        try:
+            import winreg
+            # 获取当前可执行文件路径
+            if getattr(sys, 'frozen', False):
+                # PyInstaller打包后的可执行文件
+                exe_path = sys.executable
+            else:
+                # 开发环境 - 使用Python解释器和脚本
+                exe_path = f'"{sys.executable}" "{Path(__file__).parent.parent / "main.py"}"'
+            
+            # 静默启动参数
+            startup_cmd = f'"{exe_path}" --silent'
+            
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_SET_VALUE
+            )
+            winreg.SetValueEx(key, "easyNginx", 0, winreg.REG_SZ, startup_cmd)
+            winreg.CloseKey(key)
+            logger.info("Startup enabled")
+        except Exception as e:
+            logger.error(f"Failed to enable startup: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to enable startup: {e}")
+    
+    def _disable_startup(self):
+        """禁用开机启动."""
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_SET_VALUE
+            )
+            winreg.DeleteValue(key, "easyNginx")
+            winreg.CloseKey(key)
+            logger.info("Startup disabled")
+        except Exception as e:
+            logger.error(f"Failed to disable startup: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to disable startup: {e}")
+    
+    def _on_toggle_startup(self, checked: bool):
+        """处理开机启动菜单项的点击."""
+        if checked:
+            self._enable_startup()
+        else:
+            self._disable_startup()
     
     def closeEvent(self, event):
         """Close event."""
