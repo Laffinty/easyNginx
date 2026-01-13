@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # Application version
-APP_VERSION = "v1.0"
+APP_VERSION = "v1.0.0"
 from typing import Optional
 from PySide6.QtWidgets import QApplication, QDialog
 from PySide6.QtCore import Qt, QDir
